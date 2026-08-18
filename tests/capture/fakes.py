@@ -77,11 +77,15 @@ class FakeVectorLayer:
 
 
 class FakeRasterLayer:
-    def __init__(self, source, crs="EPSG:32643", bands=3, storage_type="GTiff"):
+    def __init__(self, source, crs="EPSG:32643", bands=3, storage_type="GTiff",
+                 pixel_size=(30.0, 30.0), width=1200, height=800):
         self._source = source
         self._crs = FakeCrs(crs)
         self._bands = bands
         self._provider = FakeDataProvider("gdal", storage_type)
+        self._pixel_size = pixel_size
+        self._width = width
+        self._height = height
 
     def source(self):
         return self._source
@@ -94,6 +98,47 @@ class FakeRasterLayer:
 
     def bandCount(self):  # noqa: N802 — QGIS name
         return self._bands
+
+    def rasterUnitsPerPixelX(self):  # noqa: N802 — QGIS name
+        return self._pixel_size[0]
+
+    def rasterUnitsPerPixelY(self):  # noqa: N802 — QGIS name
+        return self._pixel_size[1]
+
+    def width(self):
+        return self._width
+
+    def height(self):
+        return self._height
+
+
+class FakeExpression:
+    """QgsExpression. Spells it ``expression()``, where QgsProperty spells it
+    ``expressionString()`` — the difference that sent it to repr() in A3."""
+
+    def __init__(self, expression):
+        self._expression = expression
+
+    def expression(self):
+        return self._expression
+
+
+class FakeVariant:
+    """QVariant. QGIS uses a null one for an unset optional parameter."""
+
+    def __init__(self, is_null=True):
+        self._is_null = is_null
+
+    def isNull(self):  # noqa: N802 — Qt name
+        return self._is_null
+
+
+class Anonymous:
+    """No QGIS-ish accessors at all, so flattening falls back to repr().
+
+    Its default repr carries a memory address, which is exactly the thing that
+    must not reach the dedup key.
+    """
 
 
 class FakeProperty:

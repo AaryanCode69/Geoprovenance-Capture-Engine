@@ -1,7 +1,8 @@
 # CONTRACT: The capture event dict
 
-> **STATUS: DRAFT — NOT YET FROZEN.**
-> Becomes binding when tagged `contract-v1`. After that, `RULES.md` §3.4 applies.
+> **STATUS: READY TO FREEZE — pending Person B and Person C sign-off.**
+> Every `OPEN:` item is closed. Becomes binding when tagged `contract-v1`, which
+> needs all three people's agreement (`RULES.md` §3.1). After that, §3.4 applies.
 
 | | |
 |---|---|
@@ -26,10 +27,19 @@
   "ended_at":   "2026-08-08T10:14:23.004117+00:00",
   "status": "completed" | "failed" | "cancelled",
   "parameters": {"DISTANCE": 500, "SEGMENTS": 5, "DISSOLVE": False},
+  # Every layer entry carries the SAME key set whatever its type. Vector
+  # fields are null on a raster and raster fields are null on a vector, so
+  # Person B tests for null, never for presence.
   "inputs":  [{"param": "INPUT",  "path": "/data/roads.shp",  "format": "Shapefile",
-               "crs": "EPSG:4326", "layer_type": "vector", "feature_count": 1204}],
+               "crs": "EPSG:4326", "layer_type": "vector", "feature_count": 1204,
+               "band_count": None, "pixel_size": None, "width": None, "height": None}],
   "outputs": [{"param": "OUTPUT", "path": "/out/buffered.shp", "format": "Shapefile",
-               "crs": "EPSG:4326", "layer_type": "vector", "feature_count": 1204}],
+               "crs": "EPSG:4326", "layer_type": "vector", "feature_count": 1204,
+               "band_count": None, "pixel_size": None, "width": None, "height": None}],
+  # ...and the same entry for a raster:
+  # {"param": "INPUT", "path": "/data/dem.tif", "format": "GeoTIFF",
+  #  "crs": "EPSG:32643", "layer_type": "raster", "feature_count": None,
+  #  "band_count": 3, "pixel_size": [30.0, 30.0], "width": 1200, "height": 800}
   "agent": {"qgis_version": "3.34.8", "os_info": "Ubuntu 22.04",
             "python_version": "3.10.12", "plugin_versions": {"GeoProvenance": "0.1.0"}},
   "execution_log": None
@@ -70,17 +80,33 @@ QGIS hands the normalizer `QgsProcessingFeatureSourceDefinition`, `QgsCoordinate
 | `started_at` / `ended_at` | Microsecond-precision UTC ISO 8601, always (`RULES.md` §3.2 decision 4). |
 | `status` | `failed` and `cancelled` events **are emitted**, never dropped — C's audit needs them and RQ1 completeness counts them (`RULES.md` §4.10). |
 | `crs` | `authid()` (`"EPSG:4326"`). WKT only when the CRS has no authid (`RULES.md` §5.7). |
-| `format` | From the provider/driver name, **not** the file extension — a `.gpkg` can hold vector or raster (`RULES.md` §5.8). |
-| `feature_count` | Vectors only. `None` for rasters; raster metadata goes in the layer entry as band/size fields. |
+| `format` | From the provider/driver name, **not** the file extension — a `.gpkg` can hold vector or raster (`RULES.md` §5.8). Canonicalised to a stable name where the driver is recognised (`ESRI Shapefile` → `Shapefile`, `GPKG` → `GeoPackage`, `GTiff` → `GeoTIFF`). An unrecognised driver is reported **verbatim**, never mapped to a guess. The generic provider names `ogr` and `gdal` are deliberately not translated — they identify a container, not a format. |
+| `feature_count` | Vectors only, `None` for rasters. |
+| `band_count`, `pixel_size`, `width`, `height` | Rasters only, `None` for vectors. `pixel_size` is `[x, y]` ground units per pixel in the layer's CRS, or `None` when either axis is unavailable or non-finite. |
 | `ended_at` | May be `None` for a cancelled run that never completed. |
+| `parameters` | A source restricted to a layer's selected features records its path with a `\|selectedFeaturesOnly=yes` suffix. **This is a parameter value, never a path** — the corresponding `inputs` entry holds the clean path. Two runs differing only by this flag are genuinely different runs and are not deduplicated against each other. |
 
 ---
 
-## `OPEN:` items — close before freezing
+## Closed decisions
 
-**`OPEN:` — Person A, end of Phase 0.** Raster layer entries need their own field set (band count, pixel size, dimensions). The shape above only specifies `feature_count` for vectors. Define the raster equivalent before B writes the mapper.
+Both `OPEN:` items are resolved. Recorded here with their rationale so the reasoning survives.
 
-**`OPEN:` — Person A + Person B, end of Phase 0.** Whether `agent.plugin_versions` includes every installed plugin or only those that participated in the run. Every-plugin is simpler and matches `RULES.md` §4.6's environment fingerprint; confirm B agrees.
+### Raster layer entries — four fields, always present
+
+*Closed by Person A, 18 Aug 2026 (A4).* Raster entries carry `band_count`, `pixel_size`, `width` and `height`, mirroring `feature_count` for vectors.
+
+The keys are present on **every** layer entry regardless of type rather than appearing only on rasters. A uniform key set costs four nulls per vector entry and saves Person B from branching on key presence — and a `KeyError` in the PROV mapper is a worse outcome than four nulls in a JSON blob.
+
+*Why not a nested `raster: {...}` sub-object:* it reads better but makes `merge_results` and Person B's mapper both walk two shapes instead of one, for no gain that a reader of the record ever sees.
+
+### `agent.plugin_versions` — every installed plugin
+
+*Closed by Person A, 18 Aug 2026 (A4). Person B to confirm.* The map lists **every installed plugin**, not only those that took part in the run.
+
+*Why:* it matches `RULES.md` §4.6's environment fingerprint, which is what `get_or_create_agent` deduplicates on. A plugin that was merely *present* can still have changed the result — it may have registered a Processing provider, patched a setting, or shadowed an algorithm id — so it belongs in the fingerprint of the environment. "Only participating plugins" also cannot be determined reliably from inside a post-execution hook.
+
+> **`UNVERIFIED:` — the code does not implement this yet.** `capture/environment.py` currently enumerates `qgis.utils.active_plugins`, which is the **loaded** set, not the installed set. The switch to `available_plugins` is scheduled for A6, where `environment.py` is hardened, and it needs a running QGIS to verify (`RULES.md` §11.4).
 
 ---
 
@@ -88,5 +114,6 @@ QGIS hands the normalizer `QgsProcessingFeatureSourceDefinition`, `QgsCoordinate
 
 | Date | Version | Change | Who must update what |
 |---|---|---|---|
+| 2026-08-18 | 1 (draft) | **Both `OPEN:` items closed; status is now READY TO FREEZE.** Layer entries gain four raster fields — `band_count`, `pixel_size`, `width`, `height` — present on every entry and null where they do not apply. `format` is now canonicalised from the driver name. A source restricted to selected features records a `\|selectedFeaturesOnly=yes` suffix in `parameters`. | **Person B:** four new keys on every `inputs`/`outputs` entry — additive, so an existing mapper keeps working, but rasters now carry real metadata worth mapping. If you assert on `format` strings, `ESRI Shapefile` is now `Shapefile` and `GPKG` is now `GeoPackage`. Re-pull `tests/fixtures/mock_events.json`. Please confirm the `plugin_versions` decision above. |
 | 2026-08-18 | 1 (draft) | `source` gains `run_wrapper`. A3 installs the `processing.run` monkeypatch alongside the post-execution hook, so there are three channels, not two. Free to change now — the contract is not yet tagged `contract-v1`. | Person B: if you switch on `source`, add the third case. |
 | — | 1 | Initial draft. Not yet frozen. | — |

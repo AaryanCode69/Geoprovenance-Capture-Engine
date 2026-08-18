@@ -190,7 +190,8 @@ def test_reading_a_file_reuses_the_entity_already_on_record(engine, store):
 
 def test_overwriting_an_output_creates_a_second_version(engine, store):
     """Appendix B.1 — this is what lets the graph tell 'the file before' from
-    'the file after'."""
+    'the file after'. The path here is not on disk, so the write cannot be
+    verified — and an unverifiable *write* is still evidence of a change."""
     run_buffer(engine, started_at="2026-08-08T10:00:00.000000+00:00")
     run_buffer(engine, started_at="2026-08-08T11:00:00.000000+00:00",
                parameters={**BUFFER_PARAMS, "DISTANCE": 900})
@@ -198,6 +199,80 @@ def test_overwriting_an_output_creates_a_second_version(engine, store):
     versions = store.list_entity_versions("/out/buffered_roads.shp")
     assert [v["content_version"] for v in versions] == [1, 2]
     assert versions[0]["id"] != versions[1]["id"]
+
+
+# ===========================================================================
+# decision 1 — when content_version bumps (docs/CONTRACT_schema.md)
+# ===========================================================================
+
+def _run_over(engine, tmp_path, *, started_at, rewrite=True):
+    """One buffer whose input and output are real files on disk."""
+    source = tmp_path / "roads.shp"
+    written = tmp_path / "buffered.shp"
+    if not source.exists():
+        source.write_text("roads")
+    if rewrite or not written.exists():
+        written.write_text("buffered")
+    return run_buffer(
+        engine,
+        started_at=started_at,
+        parameters={**BUFFER_PARAMS, "INPUT": str(source), "OUTPUT": str(written)},
+    )
+
+
+def test_an_output_that_provably_did_not_change_reuses_the_entity(engine, store, tmp_path):
+    """A3 bumped on every write regardless of content. Bumping when nothing
+    changed puts phantom nodes in Person C's graph and inflates Person A's own
+    RQ2 storage numbers with a bug of Person A's making (§8.6)."""
+    written = tmp_path / "buffered.shp"
+    _run_over(engine, tmp_path, started_at="2026-08-08T10:00:00.000000+00:00")
+    _run_over(engine, tmp_path, started_at="2026-08-08T11:00:00.000000+00:00", rewrite=False)
+
+    versions = store.list_entity_versions(str(written))
+    assert [v["content_version"] for v in versions] == [1]
+
+
+def test_a_changed_output_mints_a_new_version(engine, store, tmp_path):
+    written = tmp_path / "buffered.shp"
+    _run_over(engine, tmp_path, started_at="2026-08-08T10:00:00.000000+00:00")
+
+    written.write_text("buffered, but wider this time")  # different size
+    _run_over(engine, tmp_path, started_at="2026-08-08T11:00:00.000000+00:00")
+
+    versions = store.list_entity_versions(str(written))
+    assert [v["content_version"] for v in versions] == [1, 2]
+
+
+def test_an_input_edited_between_runs_gets_a_new_version(engine, store, tmp_path):
+    """The signal Person C's 'is this input unchanged?' audit component wants."""
+    source = tmp_path / "roads.shp"
+    _run_over(engine, tmp_path, started_at="2026-08-08T10:00:00.000000+00:00")
+
+    source.write_text("roads, edited outside QGIS")
+    _run_over(engine, tmp_path, started_at="2026-08-08T11:00:00.000000+00:00")
+
+    versions = store.list_entity_versions(str(source))
+    assert [v["content_version"] for v in versions] == [1, 2]
+
+
+def test_an_unreadable_input_reuses_rather_than_inventing_a_version(engine, store):
+    """§5.6 — a job that merely READ a file it cannot stat has demonstrated no
+    change, so guessing at one would be inventing a fact."""
+    run_buffer(engine, started_at="2026-08-08T10:00:00.000000+00:00")
+    run_buffer(engine, started_at="2026-08-08T11:00:00.000000+00:00",
+               parameters={**BUFFER_PARAMS, "OUTPUT": "/out/other.shp"})
+
+    assert len(store.list_entity_versions("/data/roads.shp")) == 1
+
+
+def test_the_size_and_time_probe_is_recorded_for_later_comparison(engine, store, tmp_path):
+    written = tmp_path / "buffered.shp"
+    _run_over(engine, tmp_path, started_at="2026-08-08T10:00:00.000000+00:00")
+
+    entity = store.find_entity_by_path(str(written))
+    metadata = json.loads(entity["metadata_json"])
+    assert metadata["size_bytes"] == written.stat().st_size
+    assert metadata["mtime_ns"] == written.stat().st_mtime_ns
 
 
 def test_a_memory_output_is_recorded_without_a_path(engine, store):
@@ -320,7 +395,7 @@ def test_a_layer_object_from_qgis_is_captured_whole(engine, store):
 
     entity = store.find_entity_by_path("/data/roads.shp")
     assert entity["crs"] == "EPSG:4326"
-    assert entity["format"] == "ESRI Shapefile"
+    assert entity["format"] == "Shapefile"   # canonicalised from "ESRI Shapefile"
     assert entity["layer_type"] == "vector"
 
     output = store.find_entity_by_path("/out/buffered.shp")

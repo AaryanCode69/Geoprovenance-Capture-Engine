@@ -24,7 +24,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 1204
+        "feature_count": 1204,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -34,7 +38,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 1204
+        "feature_count": 1204,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -65,7 +73,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 1204
+        "feature_count": 1204,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       },
       {
         "param": "OVERLAY",
@@ -73,7 +85,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 1
+        "feature_count": 1,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -83,7 +99,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 842
+        "feature_count": 842,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -114,10 +134,17 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/merged.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [],
@@ -152,7 +179,14 @@
         "format": "JP2000",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       },
       {
         "param": "INPUT",
@@ -160,17 +194,31 @@
         "format": "JP2000",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/merged.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "agent": {
@@ -201,20 +249,34 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/merged.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/reprojected.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "agent": {
@@ -244,10 +306,17 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/reprojected.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       },
       {
         "param": "INPUT",
@@ -255,7 +324,11 @@
         "format": "Shapefile",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -265,7 +338,14 @@
         "format": null,
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "agent": {
@@ -299,17 +379,31 @@
         "format": null,
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/ndvi.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "agent": {
@@ -340,20 +434,34 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/ndvi.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/classes.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "agent": {
@@ -384,20 +492,31 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/classes.tif",
-        "format": "GTiff",
+        "format": "GeoTIFF",
         "crs": "EPSG:32643",
         "layer_type": "raster",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": 1,
+        "pixel_size": [
+          10.0,
+          10.0
+        ],
+        "width": 10980,
+        "height": 10980
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/classes.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -430,20 +549,28 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/classes.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/dissolved.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -474,20 +601,28 @@
       {
         "param": "INPUT",
         "path": "/work/ndvi/dissolved.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "/work/ndvi/land_cover.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:32643",
         "layer_type": "vector",
-        "feature_count": null
+        "feature_count": null,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -522,7 +657,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 8
+        "feature_count": 8,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -532,7 +671,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 8
+        "feature_count": 8,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -568,7 +711,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 8
+        "feature_count": 8,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -578,7 +725,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       },
       {
         "param": "FAIL_OUTPUT",
@@ -586,7 +737,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -623,25 +778,37 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       },
       {
         "param": "OVERLAY",
         "path": "data/sample_areas.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
       {
         "param": "OUTPUT",
         "path": "data/derived/urban_dissolved.gpkg",
-        "format": "GPKG",
+        "format": "GeoPackage",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 1
+        "feature_count": 1,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -675,7 +842,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -685,7 +856,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 4
+        "feature_count": 4,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {
@@ -721,7 +896,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 8
+        "feature_count": 8,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "outputs": [
@@ -731,7 +910,11 @@
         "format": "Shapefile",
         "crs": "EPSG:4326",
         "layer_type": "vector",
-        "feature_count": 8
+        "feature_count": 8,
+        "band_count": null,
+        "pixel_size": null,
+        "width": null,
+        "height": null
       }
     ],
     "agent": {

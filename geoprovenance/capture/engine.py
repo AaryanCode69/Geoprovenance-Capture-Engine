@@ -30,6 +30,8 @@ Phase 2 seam
 
 from __future__ import annotations
 
+import json
+import os
 import threading
 import uuid
 from typing import Any
@@ -37,6 +39,43 @@ from typing import Any
 from ..log import CRITICAL, INFO, log, log_exception
 from ..storage.store import ProvenanceStore, utc_now_iso
 from . import environment, normalizer
+
+#: Layer-entry fields worth keeping on the entity row (docs/CONTRACT_event.md).
+_ENTITY_METADATA_FIELDS = ("feature_count", "band_count", "pixel_size", "width", "height")
+
+
+def _stat_probe(path: str | None) -> dict[str, int] | None:
+    """Size and modification time for a path, or None when it cannot be read.
+
+    This is the cheap content-change proxy behind decision 1 in
+    docs/CONTRACT_schema.md. Deliberately NOT a hash: fingerprinting is Person
+    B's job (§1.2), it happens asynchronously after this row is written, and
+    stat() costs microseconds where hashing a 1 GB raster does not (§8.4).
+    """
+    if not path:
+        return None
+    try:
+        info = os.stat(path)
+    except OSError:
+        # Missing, permission-denied, or a path that was never a real file.
+        return None
+    return {"size_bytes": info.st_size, "mtime_ns": info.st_mtime_ns}
+
+
+def _recorded_probe(entity: dict) -> dict[str, int] | None:
+    """The probe stored on an existing entity row, or None if it has none."""
+    raw = entity.get("metadata_json")
+    if not raw:
+        return None
+    try:
+        metadata = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    if "size_bytes" not in metadata or "mtime_ns" not in metadata:
+        return None
+    return {"size_bytes": metadata["size_bytes"], "mtime_ns": metadata["mtime_ns"]}
 
 
 class CaptureResult:
@@ -227,39 +266,76 @@ class ProvenanceCaptureEngine:
         return agent_id
 
     def _entity_for_input(self, layer: dict) -> str:
-        """The dataset a job read. Reuses the latest recorded version.
-
-        Reading a file does not create a new version of it — the bytes we read
-        are the bytes already on record (Appendix B.1).
-        """
-        if layer["path"]:
-            existing = self.store.find_entity_by_path(layer["path"])
-            if existing is not None:
-                return existing["id"]
-        return self._new_entity(layer, content_version=1)
+        """The dataset a job read."""
+        return self._entity_for_path(layer, writing=False)
 
     def _entity_for_output(self, layer: dict) -> str:
-        """The dataset a job wrote. A write always makes a new version.
+        """The dataset a job wrote."""
+        return self._entity_for_path(layer, writing=True)
 
-        ``OPEN:`` (docs/CONTRACT_schema.md decision 1) — this is the *structural*
-        policy: every write bumps content_version, whether or not the bytes
-        changed. The alternative is to bump only when Person B's fingerprint
-        differs, which is more accurate but needs an async correction after the
-        row is already written. A3 takes the structural option so the write
-        path is complete and correct on its own; the decision is still due
-        before contract-v1.
+    def _entity_for_path(self, layer: dict, *, writing: bool) -> str:
+        """Reuse the entity on record, or mint a new content version of it.
+
+        Decision 1 in docs/CONTRACT_schema.md. Identity is
+        ``(file_path, content_version)`` (Appendix B.1), and this is the rule
+        that decides when the version moves: **the recorded size and mtime
+        disagree with what is on disk now.**
+
+        Not "every write bumps", which is what A3 did — re-running a workflow
+        over unchanged bytes then invented a new version of every output, which
+        puts phantom nodes in Person C's graph and inflates Person A's own RQ2
+        storage numbers with a bug of Person A's making (§8.6).
+
+        Not "Person B bumps when the hash disagrees" either: fingerprinting is
+        asynchronous and lands after the relations already point at this row
+        (§1.2 — B never mutates identity). A hash that disagrees with the
+        previous version is an audit finding for Person C, not a correction.
+
+        When the file cannot be stat'd the two directions differ, because the
+        evidence differs. A job that *wrote* a file has demonstrated a change,
+        so an unverifiable write still bumps. A job that merely *read* one has
+        demonstrated nothing, so an unverifiable read reuses rather than
+        inventing a version (§5.6 — never guess).
         """
-        if layer["path"]:
-            return self._new_entity(
-                layer, content_version=self.store.next_content_version(layer["path"])
-            )
-        return self._new_entity(layer, content_version=1)
+        path = layer.get("path")
+        if not path:
+            # Memory / temporary / /vsimem/ — no file, so nothing to compare
+            # and nothing for Person B to fingerprint (§3.3).
+            return self._new_entity(layer, content_version=1, probe=None)
 
-    def _new_entity(self, layer: dict, *, content_version: int) -> str:
+        probe = _stat_probe(path)
+        existing = self.store.find_entity_by_path(path)
+        if existing is None:
+            return self._new_entity(layer, content_version=1, probe=probe)
+
+        recorded = _recorded_probe(existing)
+        if probe is not None and recorded is not None:
+            if probe == recorded:
+                return existing["id"]
+        elif not writing:
+            return existing["id"]
+
+        return self._new_entity(
+            layer,
+            content_version=self.store.next_content_version(path),
+            probe=probe,
+        )
+
+    def _new_entity(self, layer: dict, *, content_version: int,
+                    probe: dict[str, int] | None = None) -> str:
         label = layer.get("label")
         if not label:
             path = layer.get("path")
             label = path.rsplit("/", 1)[-1] if path else f"{layer['param']} (temporary)"
+
+        metadata = {
+            field: layer[field]
+            for field in _ENTITY_METADATA_FIELDS
+            if layer.get(field) is not None
+        }
+        if probe is not None:
+            metadata.update(probe)
+
         return self.store.add_entity(
             entity_type="dataset",
             label=label,
@@ -268,8 +344,7 @@ class ProvenanceCaptureEngine:
             format=layer.get("format"),
             crs=layer.get("crs"),
             layer_type=layer.get("layer_type") or "unknown",
-            metadata={"feature_count": layer["feature_count"]}
-            if layer.get("feature_count") is not None else None,
+            metadata=metadata or None,
         )
 
     # -- diagnostics -------------------------------------------------------

@@ -1,7 +1,8 @@
 # CONTRACT: Provenance database schema
 
-> **STATUS: DRAFT — NOT YET FROZEN.**
-> Becomes binding when tagged `contract-v1` with Person B's and Person C's agreement.
+> **STATUS: READY TO FREEZE — pending Person B and Person C sign-off.**
+> Every `OPEN:` item is closed. Becomes binding when tagged `contract-v1` with
+> Person B's and Person C's agreement (`RULES.md` §3.1).
 > After that, changing anything here follows the mandatory 5-step procedure in `RULES.md` §3.4.
 
 | | |
@@ -37,7 +38,26 @@ UNIQUE (file_path, content_version)
 
 *Why:* without it the graph cannot tell "the file before" from "the file after", so B's derivation chains and C's history view are both wrong. SQLite treats NULLs as distinct in `UNIQUE`, so memory layers (`file_path IS NULL`) are correctly never deduplicated against each other.
 
-**`OPEN:` — Person A, close by end of Phase 0.** The mechanism that decides *when* to bump `content_version`. The version changes when the fingerprint changes, but B computes fingerprints asynchronously, after the row is written. Options: (a) A writes `content_version = 1` and B bumps on hash mismatch; (b) A checks file mtime + size at write time as a cheap proxy. Decide before freezing — it changes B's writer call.
+#### When the version bumps
+
+*Closed by Person A, 18 Aug 2026 (A4). Option (b).*
+
+**The version moves when the file's size or modification time disagrees with what was recorded for that path.** Person A stats the file at write time and stores `size_bytes` and `mtime_ns` in that entity's `metadata_json`; the next execution touching the same path compares against them.
+
+When the file cannot be stat'd — missing, permission denied, or never a real file — the two directions differ, because the evidence differs:
+
+| The job | Cannot verify | Why |
+|---|---|---|
+| **wrote** the file | mint a new version | A write is itself evidence that the content changed. |
+| **read** the file | reuse the entity | A read demonstrates nothing. Inventing a version would be a guess (§5.6). |
+
+*Why not (a) — A writes `1`, B bumps on hash mismatch:* entity identity is Person A's decision (Appendix B.1) and Person B's fingerprinting is asynchronous, so by the time a hash disagrees the relations already point at the row. B would be mutating identity after the fact, which §1.2 puts outside B's half. **A fingerprint that disagrees with the previous version is an audit finding for Person C, not a correction to the record.**
+
+*Why not "every write bumps", which is what A3 did:* re-running a workflow over unchanged bytes invented a new version of every output. That puts phantom nodes in Person C's graph and inflates Person A's own RQ2 storage numbers with a bug of Person A's making — the same failure mode §4.6 guards against for `agents` rows.
+
+*Why size + mtime rather than a hash:* hashing is Person B's job (§1.2), it happens after this row is written, and `stat()` costs microseconds where hashing a 1 GB raster does not — this runs inside the user's processing run, and §8.4 targets under 5% overhead. It is a proxy and it can miss a rewrite that preserves both size and mtime; that is an accepted, documented limit, and B's fingerprint is the authoritative check.
+
+> **No schema change.** The probe lives in the existing `entities.metadata_json` column, so `PRAGMA user_version` stays at 1 and no migration is needed.
 
 ### 2. Relation role vocabulary — lowercase, original key preserved
 
@@ -103,4 +123,5 @@ Every post-freeze change needs a dated row here, per `RULES.md` §3.4 step 2.
 
 | Date | Version | Change | Who must update what |
 |---|---|---|---|
+| 2026-08-18 | 1 (draft) | **Decision 1's `OPEN:` item closed; status is now READY TO FREEZE.** `content_version` bumps when a size + mtime probe disagrees with what was recorded, not on every write. The probe is stored in the existing `entities.metadata_json`, so **no DDL change and no migration** — `user_version` stays 1. | **Person B:** do not bump `content_version` yourself. Attach your fingerprint to whichever version Person A minted; a hash that disagrees with the previous version is an audit finding for Person C, not a correction. **Person C:** re-running a workflow over unchanged files no longer produces a fresh node per output. |
 | — | 1 | Initial draft. Not yet frozen. | — |

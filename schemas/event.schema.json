@@ -72,7 +72,7 @@
         },
         "format": {
           "type": ["string", "null"],
-          "description": "From the provider/driver name, NOT the file extension - a .gpkg can hold vector or raster (RULES.md 5.8)."
+          "description": "From the provider/driver name, NOT the file extension - a .gpkg can hold vector or raster (RULES.md 5.8). Canonicalised to a stable name where the driver is recognised; reported verbatim where it is not."
         },
         "crs": {
           "type": ["string", "null"],
@@ -84,7 +84,26 @@
         },
         "feature_count": {
           "type": ["integer", "null"],
-          "description": "Vectors only. OPEN: the raster equivalent (bands, pixel size, dimensions) is undecided - see docs/CONTRACT_event.md."
+          "description": "Vectors only; null for rasters. Every key below is present on EVERY layer entry whatever its type, so Person B tests for null, never for presence."
+        },
+        "band_count": {
+          "type": ["integer", "null"],
+          "description": "Rasters only; null for vectors. Number of bands."
+        },
+        "pixel_size": {
+          "type": ["array", "null"],
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Rasters only; null for vectors. [x, y] ground units per pixel, in the layer's CRS. Null when either axis is unavailable or non-finite."
+        },
+        "width": {
+          "type": ["integer", "null"],
+          "description": "Rasters only; null for vectors. Width in pixels."
+        },
+        "height": {
+          "type": ["integer", "null"],
+          "description": "Rasters only; null for vectors. Height in pixels."
         }
       }
     },

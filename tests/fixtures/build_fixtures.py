@@ -356,8 +356,8 @@ def build_workflow_2(store: ProvenanceStore, agent: str) -> list[dict]:
             _event("w2/reproject_failed", session, "gdal:warpreproject",
                    "Warp (reproject)", ts(120), ts(121), status="failed",
                    parameters={"TARGET_CRS": "EPSG:32643", "RESAMPLING": 0},
-                   inputs=[_layer("INPUT", "/work/ndvi/merged.tif", "GTiff",
-                                  "EPSG:32643", "raster")],
+                   inputs=[_layer("INPUT", "/work/ndvi/merged.tif", "GeoTIFF",
+                                  "EPSG:32643", "raster", **S2_RASTER)],
                    outputs=[], agent=QGIS_334, provider="gdal",
                    execution_log="ERROR 1: Attempt to create new tiff file failed: "
                                  "No space left on device"))
@@ -380,7 +380,7 @@ def build_workflow_2(store: ProvenanceStore, agent: str) -> list[dict]:
                 label=pathlib.Path(out_path).name if out_path else "Clipped (temporary)",
                 file_path=out_path,
                 format=None if out_path is None else (
-                    "GTiff" if out_path.endswith(".tif") else "GPKG"),
+                    "GeoTIFF" if out_path.endswith(".tif") else "GeoPackage"),
                 crs="EPSG:32643", layer_type=out_type, created_at=ended,
                 metadata={"temporary": out_path is None})
 
@@ -440,7 +440,7 @@ def build_workflow_2(store: ProvenanceStore, agent: str) -> list[dict]:
 def build_workflow_3(store: ProvenanceStore, agent: str) -> list[dict]:
     session = fid("session/w3")
     shp = {"format": "Shapefile", "crs": "EPSG:4326", "layer_type": "vector"}
-    gpkg = {"format": "GPKG", "crs": "EPSG:4326", "layer_type": "vector"}
+    gpkg = {"format": "GeoPackage", "crs": "EPSG:4326", "layer_type": "vector"}
 
     # Relative to tests/fixtures/ — see README.md. Absolute paths would be
     # machine-specific and useless to B and C once committed.
@@ -586,8 +586,8 @@ def build_workflow_3(store: ProvenanceStore, agent: str) -> list[dict]:
                parameters={"FIELD": ["category"], "SEPARATE_DISJOINT": False},
                inputs=[_layer("INPUT", "data/derived/urban.shp", "Shapefile",
                               "EPSG:4326", "vector", 4),
-                       _layer("OVERLAY", areas_path, "GPKG", "EPSG:4326", "vector", 4)],
-               outputs=[_layer("OUTPUT", "data/derived/urban_dissolved.gpkg", "GPKG",
+                       _layer("OVERLAY", areas_path, "GeoPackage", "EPSG:4326", "vector", 4)],
+               outputs=[_layer("OUTPUT", "data/derived/urban_dissolved.gpkg", "GeoPackage",
                                "EPSG:4326", "vector", 1)],
                agent=QGIS_340),
         _event("w3/centroids", session, "native:centroids", "Centroids",
@@ -614,15 +614,30 @@ def build_workflow_3(store: ProvenanceStore, agent: str) -> list[dict]:
 # ===========================================================================
 
 def _layer(param, path, format=None, crs=None, layer_type="vector",  # noqa: A002
-           feature_count=None):
+           feature_count=None, band_count=None, pixel_size=None,
+           width=None, height=None):
+    """One inputs/outputs entry (docs/CONTRACT_event.md).
+
+    Every key is present whatever the layer type — vector fields are null on a
+    raster and raster fields are null on a vector — so Person B's mapper tests
+    for null, never for key presence.
+    """
     return {"param": param, "path": path, "format": format, "crs": crs,
-            "layer_type": layer_type, "feature_count": feature_count}
+            "layer_type": layer_type, "feature_count": feature_count,
+            "band_count": band_count, "pixel_size": pixel_size,
+            "width": width, "height": height}
+
+
+#: Plausible Sentinel-2 raster metadata, so Person B's mapper meets a populated
+#: raster entry in the fixtures rather than only ever seeing nulls.
+S2_RASTER = {"band_count": 1, "pixel_size": [10.0, 10.0], "width": 10980, "height": 10980}
 
 
 def _entity_layer(store: ProvenanceStore, entity_id: str, key: str) -> dict:
     row = store.get_entity(entity_id)
+    raster = S2_RASTER if (row["layer_type"] or "") == "raster" else {}
     return _layer(key, row["file_path"], row["format"], row["crs"],
-                  row["layer_type"] or "unknown")
+                  row["layer_type"] or "unknown", **raster)
 
 
 def _event(name, session, algorithm_id, algorithm_name, started, ended, *,

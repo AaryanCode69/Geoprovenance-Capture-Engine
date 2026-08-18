@@ -16,13 +16,16 @@ import pytest
 from geoprovenance.capture import normalizer as n
 
 from fakes import (
+    Anonymous,
     Explosive,
     FakeAlgorithmDefinitions,
     FakeCrs,
+    FakeExpression,
     FakeOutputDefinition,
     FakeProperty,
     FakeRasterLayer,
     FakeSourceDefinition,
+    FakeVariant,
     FakeVectorLayer,
     Unreprable,
 )
@@ -94,6 +97,48 @@ def test_an_unknown_object_falls_back_to_repr():
             return "<Mystery object>"
 
     assert n.flatten_value(Mystery()) == "<Mystery object>"
+
+
+def test_a_repr_fallback_carries_no_memory_address():
+    """A4 — the repr() fallback is hashed into the dedup key, so an address in
+    it makes one execution hash differently on each channel."""
+    flattened = n.flatten_value(Anonymous())
+    assert "0x…" in flattened          # the address was masked, not kept
+    assert "Anonymous" in flattened    # ...but the type is still identifiable
+
+
+def test_two_instances_at_different_addresses_flatten_identically():
+    """The regression test for the dedup instability: §5.9's first-channel-wins
+    rule cannot fire if the two channels compute different keys."""
+    assert n.flatten_value(Anonymous()) == n.flatten_value(Anonymous())
+
+
+def test_a_bare_expression_object_becomes_its_text_not_a_repr():
+    """QgsExpression spells it expression(); QgsProperty spells it
+    expressionString(). Only the second was recognised, so the first fell
+    through to repr() — and therefore into the instability above."""
+    assert n.flatten_value(FakeExpression('"pop" > 1000')) == '"pop" > 1000'
+
+
+def test_a_null_variant_becomes_none():
+    """QGIS uses a null QVariant for an unset optional parameter."""
+    assert n.flatten_value(FakeVariant(is_null=True)) is None
+
+
+def test_an_enum_becomes_its_value():
+    """QGIS 3.30+ hands out real Python enums where older releases used ints."""
+    import enum as _enum
+
+    class Distance(_enum.Enum):
+        METRES = 0
+
+    assert n.flatten_value(Distance.METRES) == 0
+
+
+def test_a_decimal_survives_as_a_number():
+    import decimal
+
+    assert n.flatten_value(decimal.Decimal("1.5")) == 1.5
 
 
 def test_an_object_that_raises_on_every_access_is_survived():
@@ -177,10 +222,10 @@ def test_a_vector_layer_is_described_from_the_object():
 
 def test_format_comes_from_the_driver_not_the_extension():
     """§5.8 [HARD] — a .gpkg can hold vector or raster, so the extension tells
-    you nothing reliable."""
+    you nothing reliable. The driver says raster, and it wins."""
     raster_in_a_gpkg = FakeRasterLayer("/data/dem.gpkg", storage_type="GPKG")
     entry = n.describe_layer("INPUT", raster_in_a_gpkg)
-    assert entry["format"] == "GPKG"
+    assert entry["format"] == "GeoPackage"   # canonicalised from the driver's "GPKG"
     assert entry["layer_type"] == "raster"
 
 
@@ -205,6 +250,57 @@ def test_the_layer_name_is_never_mistaken_for_the_source():
 
 
 # ===========================================================================
+# A4 — raster metadata (docs/CONTRACT_event.md, decision closed in A4)
+# ===========================================================================
+
+def test_a_raster_reports_bands_pixel_size_and_dimensions():
+    entry = n.describe_layer(
+        "INPUT", FakeRasterLayer("/data/dem.tif", bands=3,
+                                 pixel_size=(30.0, 30.0), width=1200, height=800)
+    )
+    assert entry["layer_type"] == "raster"
+    assert entry["band_count"] == 3
+    assert entry["pixel_size"] == [30.0, 30.0]
+    assert entry["width"] == 1200
+    assert entry["height"] == 800
+    assert entry["feature_count"] is None      # a raster has no features
+
+
+def test_a_vector_reports_the_mirror_image():
+    """Every key is present on every entry, so Person B tests for None, never
+    for presence."""
+    entry = n.describe_layer("INPUT", FakeVectorLayer("/data/roads.shp", feature_count=1204))
+    assert entry["feature_count"] == 1204
+    assert entry["band_count"] is None
+    assert entry["pixel_size"] is None
+    assert entry["width"] is None
+    assert entry["height"] is None
+
+
+def test_every_layer_entry_has_the_same_key_set():
+    vector = n.describe_layer("INPUT", FakeVectorLayer("/data/roads.shp"))
+    raster = n.describe_layer("INPUT", FakeRasterLayer("/data/dem.tif"))
+    nothing = n.describe_layer("INPUT", None)
+    assert set(vector) == set(raster) == set(nothing)
+
+
+# ===========================================================================
+# §5.8 — the provider/driver name is canonicalised, never guessed
+# ===========================================================================
+
+def test_a_shapefile_driver_becomes_a_stable_format_name():
+    entry = n.describe_layer("INPUT", FakeVectorLayer("/data/roads.shp"))
+    assert entry["format"] == "Shapefile"
+
+
+def test_an_unrecognised_driver_passes_through_unchanged():
+    """§5.6 — an unknown driver is reported as QGIS reported it. Mapping it to
+    a plausible-looking guess would put a fabricated fact on the record."""
+    layer = FakeVectorLayer("/data/odd.xyz", storage_type="SomeFutureDriver")
+    assert n.describe_layer("INPUT", layer)["format"] == "SomeFutureDriver"
+
+
+# ===========================================================================
 # §5.9 — the dedup key both channels compute
 # ===========================================================================
 
@@ -215,6 +311,37 @@ def test_the_same_execution_seen_milliseconds_apart_gets_one_key():
     first = n.dedup_key("native:buffer", params, "2026-08-08T10:14:22.400000+00:00")
     second = n.dedup_key("native:buffer", params, "2026-08-08T10:14:22.499999+00:00")
     assert first == second
+
+
+def test_an_unrecognised_parameter_type_still_gives_a_stable_key():
+    """A4, the important one. Before the repr() fallback was made address-free,
+    a parameter QGIS handed over as an unrecognised object produced a different
+    key on each channel, so the hook and the wrapper each inserted the same job
+    and §5.9's corroboration counter never moved."""
+    when = "2026-08-08T10:14:22.400000+00:00"
+    first = n.dedup_key("native:buffer", {"EXTENT": Anonymous()}, when)
+    second = n.dedup_key("native:buffer", {"EXTENT": Anonymous()}, when)
+    assert first == second
+
+
+def test_selecting_only_some_features_is_a_different_run():
+    """A4 — dropping selectedFeaturesOnly made these two collide, so the second
+    was discarded as a duplicate of the first even though it processed
+    different data."""
+    when = "2026-08-08T10:14:22.400000+00:00"
+    whole = {"INPUT": FakeSourceDefinition("/data/roads.shp", selected_only=False)}
+    selection = {"INPUT": FakeSourceDefinition("/data/roads.shp", selected_only=True)}
+    assert n.dedup_key("native:buffer", whole, when) != \
+        n.dedup_key("native:buffer", selection, when)
+
+
+def test_the_selection_flag_never_leaks_into_the_recorded_path():
+    """It belongs in the parameters. Letting it reach entities.file_path would
+    invent a file that does not exist (§5.6)."""
+    entry = n.describe_layer(
+        "INPUT", FakeSourceDefinition("/data/roads.shp", selected_only=True)
+    )
+    assert entry["path"] == "/data/roads.shp"
 
 
 def test_executions_in_different_buckets_get_different_keys():

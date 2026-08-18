@@ -376,10 +376,19 @@ class ProvenanceStore:
     def next_content_version(self, file_path: str) -> int:
         """The content version a NEW version of ``file_path`` would take.
 
-        ``OPEN:`` (docs/CONTRACT_schema.md, decision 1) — *when* to bump is not
-        yet decided, because Person B computes fingerprints asynchronously after
-        this row is written. This method supplies the mechanism; the policy is a
-        Phase 0 decision. Do not make it implicit by auto-bumping in add_entity.
+        Mechanism only. The *policy* — when a bump is warranted — is decision 1
+        in docs/CONTRACT_schema.md, closed 18 Aug 2026: the version moves when a
+        size + mtime probe disagrees with what was recorded for that path. It
+        lives in capture/engine.py, where the filesystem is in reach; keeping it
+        out of here is what lets storage/ import zero QGIS and stay pure (§4.1).
+
+        Deliberately not implicit: add_entity never auto-bumps. A caller that
+        wants a new version asks for one, so the decision is always visible at
+        the call site rather than hidden in an insert.
+
+        Person B: do not call this to correct a version after fingerprinting.
+        A hash that disagrees with the previous version is an audit finding for
+        Person C, not a correction to the record (§1.2).
         """
         row = self._connection().execute(
             "SELECT max(content_version) FROM entities WHERE file_path = ?",

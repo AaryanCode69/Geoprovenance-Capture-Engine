@@ -30,16 +30,30 @@ Rules implemented here
           in `parameters`.
     §5.9  The dedup key both channels agree on.
 
-Left for A4 (marked TODO(A4) below)
-    The exhaustive awkward-type table, raster band/size metadata, and the
-    per-provider format name mapping.
+A4 hardening
+    The awkward-type table below is exhaustive as far as the QGIS types this
+    component has been shown to receive. Three things it now gets right that
+    A3 did not:
+
+      - repr() fallbacks are address-free, because dedup_key hashes them. A
+        raw repr() embeds `0x7f3c…`, so the same execution seen on two
+        channels hashed differently and §5.9's first-channel-wins rule never
+        fired — the job was written twice.
+      - `selectedFeaturesOnly` survives. Without it, "buffer the whole layer"
+        and "buffer only the selection" recorded identically AND collided on
+        the dedup key, so the second run was discarded as a duplicate.
+      - Raster layers carry band count, pixel size and dimensions, closing
+        the OPEN item in docs/CONTRACT_event.md.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import decimal
+import enum
 import hashlib
 import json
+import re
 import uuid
 from typing import Any
 
@@ -55,10 +69,64 @@ MAX_DEPTH = 6
 #: §5.9 — both channels must land in the same bucket for the same execution.
 DEDUP_BUCKET_MS = 100
 
+#: §5.8 — stable format names, keyed by the provider or driver name QGIS
+#: reports, NEVER by file extension. Only specific driver names are translated:
+#: `ogr` and `gdal` are generic container providers and say nothing about the
+#: format, so they are left alone rather than mapped to a guess. An
+#: unrecognised name passes through unchanged (§5.6 — never invent).
+PROVIDER_FORMATS = {
+    "esri shapefile": "Shapefile",
+    "gpkg": "GeoPackage",
+    "geopackage": "GeoPackage",
+    "gtiff": "GeoTIFF",
+    "memory": "Memory",
+    "delimitedtext": "Delimited text",
+    "postgres": "PostGIS",
+    "spatialite": "SpatiaLite",
+    "wfs": "WFS",
+    "wms": "WMS",
+}
+
+#: Marks a source that covers only the layer's selected features. Written in
+#: GDAL/OGR's `|key=value` selector style so classify_path strips it back off
+#: the same way it strips `|layername=` — the flag belongs in the recorded
+#: parameters, never in entities.file_path.
+SELECTED_FEATURES_SUFFIX = "|selectedFeaturesOnly=yes"
+
+#: Layer-entry fields merge_results may fill in from the algorithm's results.
+MERGEABLE_FIELDS = (
+    "format", "crs", "feature_count", "band_count", "pixel_size", "width", "height",
+)
+
+#: A CPython repr embeds the object's address: `<QgsProperty object at 0x7f3c…>`.
+#: dedup_key hashes flattened parameters, so leaving the address in makes the
+#: same execution hash differently on each channel and silently defeats §5.9.
+_MEMORY_ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
+
 
 # ---------------------------------------------------------------------------
 # parameter flattening (§5.5)
 # ---------------------------------------------------------------------------
+
+def _stable_repr(value: Any) -> str:
+    """``repr(value)`` with memory addresses masked out. Never raises.
+
+    The masking is not cosmetic. ``dedup_key`` hashes the flattened parameters,
+    and an unrecognised type reaches it as a repr. Two channels observe the
+    same execution holding the same object at the same address, but a re-run —
+    or a second interpreter-level allocation — moves it, so an unmasked repr
+    made the hash unstable and §5.9's "first channel wins, second corroborates"
+    degenerated into writing the job twice.
+    """
+    try:
+        text = repr(value)
+    except Exception:  # noqa: BLE001 — a broken __repr__ is still not our problem
+        try:
+            return f"<unserialisable {type(value).__name__}>"
+        except Exception:  # noqa: BLE001 — §5.5 is absolute
+            return "<unserialisable>"
+    return _MEMORY_ADDRESS.sub("0x…", text)
+
 
 def _call_or_get(obj: Any, name: str):
     """Read ``obj.name``, calling it when it is a method. Returns (ok, value).
@@ -98,6 +166,13 @@ def _extract_qgis_like(value: Any):
     if ok and isinstance(wkt, str):
         return True, wkt
 
+    # QVariant — QGIS uses a null QVariant for an unset optional parameter.
+    # Checked after the two branches above because QgsGeometry also has
+    # isNull(); a null geometry is better described by its (empty) WKT.
+    ok, is_null = _call_or_get(value, "isNull")
+    if ok and is_null is True:
+        return True, None
+
     # QgsProperty — an expression, or a static value wrapped in one.
     ok, expression = _call_or_get(value, "expressionString")
     if ok and isinstance(expression, str):
@@ -108,12 +183,26 @@ def _extract_qgis_like(value: Any):
             return True, flatten_value(static)
         return True, None
 
+    # QgsExpression spells the same idea differently. Without this it fell
+    # through to repr() — and therefore into the dedup instability above.
+    ok, expression = _call_or_get(value, "expression")
+    if ok and isinstance(expression, str) and expression:
+        return True, expression
+
     # QgsProcessingFeatureSourceDefinition (.source) and
     # QgsProcessingOutputLayerDefinition (.sink) both wrap a QgsProperty.
     for attribute in ("source", "sink"):
         ok, inner = _call_or_get(value, attribute)
         if ok and inner is not None and not isinstance(inner, (int, float, bool)):
-            return True, flatten_value(inner)
+            unwrapped = flatten_value(inner)
+            # "Buffer the whole layer" and "buffer only the selection" are
+            # different runs producing different data. Dropping this flag made
+            # them record identically AND collide on the dedup key, so the
+            # second was silently discarded as a duplicate of the first.
+            ok_selected, selected_only = _call_or_get(value, "selectedFeaturesOnly")
+            if ok_selected and selected_only and isinstance(unwrapped, str):
+                return True, f"{unwrapped}{SELECTED_FEATURES_SUFFIX}"
+            return True, unwrapped
 
     # QgsRectangle and friends.
     ok, text = _call_or_get(value, "toString")
@@ -142,7 +231,16 @@ def flatten_value(value: Any, _depth: int = 0) -> Any:
             return value if value == value and abs(value) != float("inf") else repr(value)
 
         if _depth >= MAX_DEPTH:
-            return repr(value)
+            return _stable_repr(value)
+
+        # QGIS 3.30+ hands out real Python enums (Qgis.ProcessingSourceType and
+        # friends) where older releases used plain ints.
+        if isinstance(value, enum.Enum):
+            return flatten_value(value.value, _depth + 1)
+
+        if isinstance(value, decimal.Decimal):
+            number = float(value)
+            return number if number == number and abs(number) != float("inf") else str(value)
 
         if isinstance(value, dict):
             return {str(k): flatten_value(v, _depth + 1) for k, v in value.items()}
@@ -163,12 +261,9 @@ def flatten_value(value: Any, _depth: int = 0) -> Any:
         if handled:
             return extracted
 
-        return repr(value)
+        return _stable_repr(value)
     except Exception:  # noqa: BLE001 — §5.5 is absolute
-        try:
-            return repr(value)
-        except Exception:  # noqa: BLE001 — a broken __repr__ is still not our problem
-            return f"<unserialisable {type(value).__name__}>"
+        return _stable_repr(value)
 
 
 def flatten_parameters(parameters: Any) -> dict[str, Any]:
@@ -231,10 +326,37 @@ def classify_path(raw: Any) -> str | None:
 
     # GDAL/OGR sublayer syntax: "GPKG:/path/to/file.gpkg:layername",
     # "/path/to/file.gpkg|layername=roads". Keep the file, drop the selector.
-    for separator in ("|layername=", "|layerid=", "|subset="):
+    for separator in ("|layername=", "|layerid=", "|subset=", "|selectedFeaturesOnly="):
         if separator in text:
             text = text.split(separator, 1)[0]
     return text or None
+
+
+def _whole_number(value: Any, accessor: str) -> int | None:
+    """A non-negative int from ``value.accessor()``, or None. Never raises.
+
+    ``isinstance(True, int)`` is True in Python, so booleans are excluded
+    explicitly — a provider that answers True to bandCount() must not be
+    recorded as a one-band raster.
+    """
+    ok, number = _call_or_get(value, accessor)
+    if ok and isinstance(number, int) and not isinstance(number, bool) and number >= 0:
+        return number
+    return None
+
+
+def _finite_number(value: Any, accessor: str) -> float | None:
+    """A finite float from ``value.accessor()``, or None. Never raises."""
+    ok, number = _call_or_get(value, accessor)
+    if not ok or isinstance(number, bool) or not isinstance(number, (int, float)):
+        return None
+    number = float(number)
+    return number if number == number and abs(number) != float("inf") else None
+
+
+def _canonical_format(name: str) -> str:
+    """A stable format name for a provider or driver name (§5.8)."""
+    return PROVIDER_FORMATS.get(name.strip().lower(), name)
 
 
 def describe_layer(param_key: str, value: Any, *, layer_type: str = "unknown") -> dict:
@@ -249,7 +371,14 @@ def describe_layer(param_key: str, value: Any, *, layer_type: str = "unknown") -
         "format": None,
         "crs": None,
         "layer_type": layer_type,
+        # Vector fields. Every key is always present, whatever the layer type,
+        # so Person B never has to test for presence — only for None.
         "feature_count": None,
+        # Raster fields (docs/CONTRACT_event.md decision, closed in A4).
+        "band_count": None,
+        "pixel_size": None,
+        "width": None,
+        "height": None,
     }
     if value is None:
         return entry
@@ -275,24 +404,33 @@ def describe_layer(param_key: str, value: Any, *, layer_type: str = "unknown") -
     if ok and provider is not None:
         ok_name, name = _call_or_get(provider, "name")
         if ok_name and isinstance(name, str) and name:
-            entry["format"] = name
+            entry["format"] = _canonical_format(name)
+        # The driver is more specific than the provider — "ogr" tells you
+        # nothing, "ESRI Shapefile" tells you everything — so it wins.
         ok_driver, driver = _call_or_get(provider, "storageType")
         if ok_driver and isinstance(driver, str) and driver:
-            entry["format"] = driver
+            entry["format"] = _canonical_format(driver)
 
-    ok, count = _call_or_get(value, "featureCount")
-    if ok and isinstance(count, int) and count >= 0:
+    count = _whole_number(value, "featureCount")
+    if count is not None:
         entry["feature_count"] = count
         if entry["layer_type"] == "unknown":
             entry["layer_type"] = "vector"
 
-    # TODO(A4): raster band count, pixel size and dimensions — the raster
-    # equivalent of feature_count is still an OPEN item in
-    # docs/CONTRACT_event.md.
-    if entry["layer_type"] == "unknown":
-        ok, _ = _call_or_get(value, "bandCount")
-        if ok:
+    bands = _whole_number(value, "bandCount")
+    if bands is not None:
+        entry["band_count"] = bands
+        if entry["layer_type"] == "unknown":
             entry["layer_type"] = "raster"
+
+        pixel_x = _finite_number(value, "rasterUnitsPerPixelX")
+        pixel_y = _finite_number(value, "rasterUnitsPerPixelY")
+        if pixel_x is not None and pixel_y is not None:
+            entry["pixel_size"] = [pixel_x, pixel_y]
+        # width()/height() exist on QgsRasterLayer but not QgsVectorLayer, so
+        # they are only asked for once bandCount() has identified a raster.
+        entry["width"] = _whole_number(value, "width")
+        entry["height"] = _whole_number(value, "height")
 
     return entry
 
@@ -323,7 +461,12 @@ def dedup_key(algorithm_id: str, parameters: Any, started_at: str) -> str:
     what produces the publishable "the hook caught 98%, the history channel
     caught the other 2%" result (§8.3).
     """
-    canonical = json.dumps(flatten_parameters(parameters), sort_keys=True, default=repr)
+    # default=_stable_repr, not default=repr: anything reaching the encoder's
+    # fallback would otherwise carry a memory address into the digest and make
+    # this key differ between two observations of one execution.
+    canonical = json.dumps(
+        flatten_parameters(parameters), sort_keys=True, default=_stable_repr
+    )
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
     return f"{algorithm_id}|{digest}|{_bucket_timestamp(started_at)}"
 
@@ -409,7 +552,7 @@ def merge_results(outputs: list[dict], results: Any, definitions: dict[str, str]
         described = describe_layer(key, value)
         if described["path"] is not None:
             existing["path"] = described["path"]
-        for field in ("format", "crs", "feature_count"):
+        for field in MERGEABLE_FIELDS:
             if existing.get(field) is None and described.get(field) is not None:
                 existing[field] = described[field]
         if existing["layer_type"] == "unknown" != described["layer_type"]:

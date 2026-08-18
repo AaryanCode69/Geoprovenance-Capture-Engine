@@ -48,11 +48,19 @@ def python_version() -> str:
 def plugin_versions() -> dict[str, str]:
     """Installed plugin names and versions.
 
-    TODO(A6): PERSON_A.md §A6 wants every installed plugin enumerated. The
-    OPEN item in docs/CONTRACT_event.md — every plugin, or only those that
-    took part in the run — must close before contract-v1. Every-plugin is
-    implemented here because it matches §4.6's environment fingerprint: a
-    plugin that was merely *present* can still have changed the result.
+    The contract decision is CLOSED (docs/CONTRACT_event.md, 18 Aug 2026):
+    **every installed plugin**, not only those that took part in the run. A
+    plugin that was merely present can still have changed the result — it may
+    have registered a Processing provider or shadowed an algorithm id — so it
+    belongs in §4.6's environment fingerprint.
+
+    UNVERIFIED / TODO(A6): the code below does NOT yet match that decision. It
+    iterates ``qgis.utils.active_plugins``, which is the *loaded* set. The fix
+    is to iterate ``qgis.utils.available_plugins`` instead, keeping the
+    per-plugin try/except. Deferred to A6 (where this module is hardened)
+    because it cannot be verified without a running QGIS (§11.4), and because
+    widening the set changes every environment fingerprint — which must happen
+    once, deliberately, not as a side effect of A4.
     """
     try:
         from qgis import utils as qgis_utils
