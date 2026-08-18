@@ -11,15 +11,16 @@
 
 PY := .venv/bin/python
 
-.PHONY: help venv test test-storage test-plugin test-capture fixtures icon \
+.PHONY: help venv test test-storage test-plugin test-capture test-qgis fixtures icon \
         deploy undeploy qgis demo1 demo2 demo3 schema-check clean
 
 help:
+	@echo "make test          EVERYTHING that runs without QGIS — the usual one"
+	@echo "make test-storage  storage suite only (RULES.md §6.1)"
+	@echo "make test-plugin   plugin-layer suite only"
+	@echo "make test-capture  capture suite only, minus the QGIS-marked tests"
+	@echo "make test-qgis     only the tests that need QGIS + pytest-qgis"
 	@echo "make venv          create .venv and install dev dependencies"
-	@echo "make test          everything that runs without QGIS (storage + plugin)"
-	@echo "make test-storage  storage suite — no QGIS needed (RULES.md §6.1)"
-	@echo "make test-plugin   plugin-layer suite — no QGIS needed (RULES.md §6.1)"
-	@echo "make test-capture  capture suite — needs QGIS + pytest-qgis"
 	@echo ""
 	@echo "make deploy        symlink the plugin into the geoprov-dev QGIS profile"
 	@echo "make undeploy      remove that symlink"
@@ -40,7 +41,10 @@ venv:
 	@$(PY) -c "import sys; print('  venv Python:', sys.version.split()[0])"
 	@echo "  In the QGIS Python console run:  import sys; sys.version"
 
-test: test-storage test-plugin
+# Everything that does not need a QGIS process. This is the suite that gets run
+# constantly, so as much as possible is kept runnable here (RULES.md §6.1).
+test:
+	$(PY) -m pytest tests -q -m "not qgis" -p no:pytest_qgis
 
 test-storage:
 	$(PY) -m pytest tests/storage -q -p no:pytest_qgis
@@ -49,7 +53,11 @@ test-plugin:
 	$(PY) -m pytest tests/plugin -q -p no:pytest_qgis
 
 test-capture:
-	$(PY) -m pytest tests/capture -q
+	$(PY) -m pytest tests/capture -q -m "not qgis" -p no:pytest_qgis
+
+# Needs QGIS + pytest-qgis. Run inside the geoprov-dev profile.
+test-qgis:
+	$(PY) -m pytest tests -q -m qgis
 
 fixtures:
 	$(PY) tests/fixtures/build_fixtures.py

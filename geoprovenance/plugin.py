@@ -50,6 +50,8 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
 from . import paths
+from .capture import hooks
+from .capture.engine import ProvenanceCaptureEngine
 from .lifecycle import CleanupStack
 from .log import CRITICAL, INFO, WARNING, log, log_exception
 from .storage.store import ProvenanceStore
@@ -73,6 +75,7 @@ class GeoProvenancePlugin:
         self.session_id = str(uuid.uuid4())
 
         self.store: ProvenanceStore | None = None
+        self.engine: ProvenanceCaptureEngine | None = None
         self.dock: GeoProvenanceDockWidget | None = None
         self.db_path = None
 
@@ -83,6 +86,7 @@ class GeoProvenancePlugin:
         log(f"{PLUGIN_NAME} loading. Session {self.session_id}", INFO)
         try:
             self._open_store()
+            self._start_capture()
             self._build_dock()
             self._build_actions()
         except Exception as exc:  # noqa: BLE001 — §5.1
@@ -111,6 +115,26 @@ class GeoProvenancePlugin:
         self._cleanup.defer("close the database", self.store.close)
         log(f"database ready at {self.db_path} "
             f"(schema version {self.store.schema_version()})", INFO)
+
+    def _start_capture(self) -> None:
+        """Start the engine and install both capture channels (A3).
+
+        Without a database there is nowhere to write, so capture stays off
+        rather than failing on every algorithm the user runs.
+        """
+        if self.store is None:
+            log("capture not started — no database (see above)", WARNING)
+            return
+
+        self.engine = ProvenanceCaptureEngine.start(self.store, self.session_id)
+        self._cleanup.defer("stop the capture engine", ProvenanceCaptureEngine.stop)
+
+        # §5.3 / §5.4 — each channel hands back its own undo, registered here
+        # at the moment it is installed rather than remembered later.
+        for description, undo in hooks.install_all(
+            self.engine, self.db_path.parent / "hooks"
+        ):
+            self._cleanup.defer(description, undo)
 
     def _build_dock(self) -> None:
         self.dock = GeoProvenanceDockWidget(self.iface.mainWindow())
@@ -176,9 +200,11 @@ class GeoProvenancePlugin:
             return
 
         counts = self.store.counts()
+        watching = "yes" if self.engine is not None else "no — see the log"
         QMessageBox.information(
             self.iface.mainWindow(), PLUGIN_NAME,
             f"Where the record is kept:\n{self.db_path}\n\n"
+            f"Watching for jobs: {watching}\n"
             f"Jobs written down so far: {counts['activities']}\n"
             f"Files being tracked: {counts['entities']}\n",
         )
@@ -196,6 +222,7 @@ class GeoProvenancePlugin:
         log(f"{PLUGIN_NAME} unloading ({len(self._cleanup)} steps)", INFO)
         failures = self._cleanup.unwind()
         self.store = None
+        self.engine = None
 
         for description, exc in failures:
             log(f"unload step failed — {description}: "

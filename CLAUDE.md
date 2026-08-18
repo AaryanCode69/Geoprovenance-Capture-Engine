@@ -37,28 +37,39 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-**Built and passing — 123 tests, `make test`, no QGIS required:**
+**Built and passing — 193 tests, `make test`, no QGIS required:**
 
 - `storage/schema.sql` — 8 tables, 9 indices, `user_version = 1`. Draft, not yet `contract-v1`.
 - `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code.
 - `storage/store.py` — **A2 complete.** `ProvenanceStore` with the full §4.5 method surface, `transaction()` with savepoint nesting, per-thread connections + write lock, WAL + foreign keys.
 - `tests/fixtures/` — **A0.3 complete.** `mock_provenance.db` (3 workflows, 16 jobs, 23 datasets, 70 relations), `mock_events.json`, `mock_ids.json`, real Shapefile + GeoPackage in `data/`, all regenerable and byte-deterministic via `make fixtures`. **B and C are unblocked** — see `tests/fixtures/README.md`.
-- `plugin.py`, `ui/dock.py`, `lifecycle.py`, `paths.py`, `log.py`, `icon.png` — **A1 written, not yet run in QGIS** (see below).
+- `plugin.py`, `ui/dock.py`, `lifecycle.py`, `paths.py`, `log.py`, `icon.png` — **A1**, written, not yet run in QGIS (see below).
+- `capture/normalizer.py` + `capture/engine.py` — **A3 core, complete and tested.** Both import zero QGIS (they duck-type), so the whole write path is verifiable here. 70 tests.
+- `capture/hooks.py` — **A3, QGIS-only, UNVERIFIED.** Post-execution hook installer + `processing.run` monkeypatch.
+- `capture/environment.py` — agent probe, degrades outside QGIS.
+- `demos/review1.py` + `docs/demos/REVIEW-1.md` — **the Review 1 gate**, passing. Drives the real `handle_post_execution` path, no QGIS needed.
 - `tools/deploy.py`, `tools/make_icon.py`, `make deploy` / `make qgis`.
-- `demos/_presenter.py` — the §7.7 demo output format plus the plain-language linter.
-- `schemas/event.schema.json` — draft; all 16 fixture events validate against it.
+- `schemas/event.schema.json` — draft; fixture events and built events both validate.
 
-**Stubs only** (docstring + rules + `NotImplementedError`): everything under `capture/`, plus `storage/workflows.py` (A6) and the three demo scripts.
+**Stubs only** (docstring + rules): `capture/history_observer.py` (A5), `storage/workflows.py` (A6), `demos/review2.py`, `demos/final.py`.
 
-**Not started:** A3–A6, Phase 2, Phase 3.
+**Not started:** A4 (normalizer hardening), A5, A6, Phase 2, Phase 3.
 
-### A1 is written but UNVERIFIED
+### What is UNVERIFIED and why
 
-`make test` covers everything about A1 that can be checked without QGIS: teardown bookkeeping (`CleanupStack`), path resolution, the logging fallback, `metadata.txt`, the icon, and — by parsing `plugin.py` — that every `addPluginToMenu`/`addToolBarIcon`/`addDockWidget` has its matching removal and every `.connect()` its `.disconnect()`.
+Nothing that requires a QGIS process has ever been executed — QGIS is not installed on this machine, so `pytest-qgis` cannot even import. Specifically:
 
-What **cannot** be checked here, and is the actual A1 "done when": *the plugin loads and unloads cleanly in QGIS with no errors in the log*. `tests/capture/test_plugin_lifecycle.py` tests exactly that and **has never been run** — QGIS is not installed on this machine. Expect to fix the `qgis_iface` stub surface on first run and record what you find in `docs/capture_coverage.md` §4.
+| Unverified | Where | First check |
+|---|---|---|
+| Plugin loads/unloads cleanly in QGIS | `tests/capture/test_plugin_lifecycle.py` | `make test-qgis` |
+| `ProcessingConfig.POST_EXECUTION_SCRIPT` constant + persistence | `capture/hooks.py` | the log says whether the hook installed |
+| What variables QGIS puts in the hook namespace | `capture/hooks.py` | `handle_post_execution` logs the names it received — paste into `docs/capture_coverage.md` §4 |
+| Which invocation paths fire the hook (§5.11 — this is RQ1 evidence) | — | the coverage table |
+| Fixture `.shp` / `.gpkg` open in QGIS | `tests/fixtures/data/` | drag onto the canvas |
 
-Same caveat applies to the fixture data files (`tests/fixtures/data/`) — spec-conformant and structurally verified, never opened in QGIS or GDAL.
+The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven.
+
+**Known limitation carried into A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it. Until then, **do not report `post_hook` durations in RQ2** — noted in `docs/capture_coverage.md` §4.
 
 Never describe unwritten code as existing; update this section when that changes.
 

@@ -24,8 +24,8 @@
       "description": "Minted once at plugin startup. RULES.md 3.2 decision 5."
     },
     "source": {
-      "enum": ["post_hook", "history_signal"],
-      "description": "Which channel produced this. Used for dedup (RULES.md 5.9) and for the RQ1 per-channel split (RULES.md 8.3)."
+      "enum": ["post_hook", "run_wrapper", "history_signal"],
+      "description": "Which channel produced this. post_hook = the Processing post-execution hook; run_wrapper = the processing.run monkeypatch; history_signal = QgsHistoryProviderRegistry.entryAdded. Used for dedup (RULES.md 5.9) and for the RQ1 per-channel split (RULES.md 8.3)."
     },
     "algorithm_id": { "type": "string", "minLength": 1, "examples": ["native:buffer"] },
     "algorithm_name": { "type": ["string", "null"], "examples": ["Buffer"] },

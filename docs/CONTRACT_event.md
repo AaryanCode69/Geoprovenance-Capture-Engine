@@ -18,7 +18,7 @@
 {
   "event_id": "uuid4",
   "session_id": "uuid4",
-  "source": "post_hook" | "history_signal",   # dedup + RQ1 channel analysis
+  "source": "post_hook" | "run_wrapper" | "history_signal",  # dedup + RQ1 channels
   "algorithm_id": "native:buffer",
   "algorithm_name": "Buffer",
   "provider": "qgis",
@@ -66,7 +66,7 @@ QGIS hands the normalizer `QgsProcessingFeatureSourceDefinition`, `QgsCoordinate
 
 | Field | Note |
 |---|---|
-| `source` | Which channel produced the event. Kept for dedup (`RULES.md` §5.9) **and** because the per-channel split is an RQ1 result (`RULES.md` §8.3). |
+| `source` | Which channel produced the event: `post_hook` (the Processing post-execution hook), `run_wrapper` (the `processing.run` monkeypatch), `history_signal` (`QgsHistoryProviderRegistry.entryAdded`). Kept for dedup (`RULES.md` §5.9) **and** because the per-channel split is an RQ1 result (`RULES.md` §8.3). |
 | `started_at` / `ended_at` | Microsecond-precision UTC ISO 8601, always (`RULES.md` §3.2 decision 4). |
 | `status` | `failed` and `cancelled` events **are emitted**, never dropped — C's audit needs them and RQ1 completeness counts them (`RULES.md` §4.10). |
 | `crs` | `authid()` (`"EPSG:4326"`). WKT only when the CRS has no authid (`RULES.md` §5.7). |
@@ -88,4 +88,5 @@ QGIS hands the normalizer `QgsProcessingFeatureSourceDefinition`, `QgsCoordinate
 
 | Date | Version | Change | Who must update what |
 |---|---|---|---|
+| 2026-08-18 | 1 (draft) | `source` gains `run_wrapper`. A3 installs the `processing.run` monkeypatch alongside the post-execution hook, so there are three channels, not two. Free to change now — the contract is not yet tagged `contract-v1`. | Person B: if you switch on `source`, add the third case. |
 | — | 1 | Initial draft. Not yet frozen. | — |
