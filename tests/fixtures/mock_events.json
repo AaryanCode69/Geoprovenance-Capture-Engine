@@ -1,0 +1,748 @@
+[
+  {
+    "event_id": "d86b442d-ad9d-5cfc-a9ac-1c97a99d4faa",
+    "session_id": "23114154-8b40-5a4b-a7b1-75809420aef6",
+    "source": "post_hook",
+    "algorithm_id": "native:buffer",
+    "algorithm_name": "Buffer",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:00:10.000000+00:00",
+    "ended_at": "2026-08-08T10:00:11.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "DISTANCE": 500,
+      "SEGMENTS": 5,
+      "DISSOLVE": false,
+      "END_CAP_STYLE": 0,
+      "JOIN_STYLE": 0,
+      "MITER_LIMIT": 2
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/data/roads.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 1204
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/output/buffered_roads.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 1204
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "423c88e4-f3d5-57d9-b7fb-3632b1839cc1",
+    "session_id": "23114154-8b40-5a4b-a7b1-75809420aef6",
+    "source": "post_hook",
+    "algorithm_id": "native:clip",
+    "algorithm_name": "Clip",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:00:20.000000+00:00",
+    "ended_at": "2026-08-08T10:00:22.000000+00:00",
+    "status": "completed",
+    "parameters": {},
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/output/buffered_roads.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 1204
+      },
+      {
+        "param": "OVERLAY",
+        "path": "/data/city_boundary.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 1
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/output/final_roads.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 842
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "7c9564d5-2e3c-5479-baf0-b17dab667316",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "gdal:warpreproject",
+    "algorithm_name": "Warp (reproject)",
+    "provider": "gdal",
+    "started_at": "2026-08-08T10:02:00.000000+00:00",
+    "ended_at": "2026-08-08T10:02:01.000000+00:00",
+    "status": "failed",
+    "parameters": {
+      "TARGET_CRS": "EPSG:32643",
+      "RESAMPLING": 0
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/merged.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": "ERROR 1: Attempt to create new tiff file failed: No space left on device"
+  },
+  {
+    "event_id": "199278f8-cc7b-5e82-b981-561928212a9e",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "gdal:merge",
+    "algorithm_name": "Merge",
+    "provider": "gdal",
+    "started_at": "2026-08-08T10:03:20.000000+00:00",
+    "ended_at": "2026-08-08T10:03:25.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "DATA_TYPE": 5,
+      "SEPARATE": true
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/data/sentinel2/B04.jp2",
+        "format": "JP2000",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      },
+      {
+        "param": "INPUT",
+        "path": "/data/sentinel2/B08.jp2",
+        "format": "JP2000",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/merged.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "49ccf6e6-f207-5c2f-8416-f7d7b6797aa6",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "gdal:warpreproject",
+    "algorithm_name": "Warp (reproject)",
+    "provider": "gdal",
+    "started_at": "2026-08-08T10:03:30.000000+00:00",
+    "ended_at": "2026-08-08T10:03:35.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "TARGET_CRS": "EPSG:32643",
+      "RESAMPLING": 0
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/merged.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/reprojected.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "980b655c-1819-5801-a5de-59e53395eca6",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "gdal:cliprasterbymasklayer",
+    "algorithm_name": "Clip raster by mask layer",
+    "provider": "gdal",
+    "started_at": "2026-08-08T10:03:40.000000+00:00",
+    "ended_at": "2026-08-08T10:03:45.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "CROP_TO_CUTLINE": true
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/reprojected.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      },
+      {
+        "param": "INPUT",
+        "path": "/data/study_area.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": null,
+        "format": null,
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "e5d96e97-6d49-56db-97b3-202c06f3a534",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "qgis:rastercalculator",
+    "algorithm_name": "Raster calculator",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:03:50.000000+00:00",
+    "ended_at": "2026-08-08T10:03:55.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "EXPRESSION": "(B8 - B4) / (B8 + B4)",
+      "CELLSIZE": 10
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": null,
+        "format": null,
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/ndvi.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "7a4d8242-48ba-5bec-a677-97a06ac89c37",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "native:reclassifybytable",
+    "algorithm_name": "Reclassify by table",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:04:00.000000+00:00",
+    "ended_at": "2026-08-08T10:04:05.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "NODATA_FOR_MISSING": true,
+      "RANGE_BOUNDARIES": 0
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/ndvi.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/classes.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "0712580b-2aee-50bc-96f8-0b97a85d4d5b",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "gdal:polygonize",
+    "algorithm_name": "Polygonize",
+    "provider": "gdal",
+    "started_at": "2026-08-08T10:04:10.000000+00:00",
+    "ended_at": "2026-08-08T10:04:15.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "FIELD": "class",
+      "EIGHT_CONNECTEDNESS": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/classes.tif",
+        "format": "GTiff",
+        "crs": "EPSG:32643",
+        "layer_type": "raster",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/classes.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "7b3a04d4-f14f-5758-93e1-1e14b1e804b9",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "native:dissolve",
+    "algorithm_name": "Dissolve",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:04:20.000000+00:00",
+    "ended_at": "2026-08-08T10:04:25.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "FIELD": [
+        "class"
+      ],
+      "SEPARATE_DISJOINT": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/classes.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/dissolved.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "2fc6d477-47b8-531c-bdc4-6c088e90bbd2",
+    "session_id": "d453321e-4a24-5baa-921d-67d7b01dbd73",
+    "source": "post_hook",
+    "algorithm_id": "qgis:fieldcalculator",
+    "algorithm_name": "Field calculator",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:04:30.000000+00:00",
+    "ended_at": "2026-08-08T10:04:35.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "FIELD_NAME": "area_ha",
+      "FORMULA": "$area / 10000"
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "/work/ndvi/dissolved.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "/work/ndvi/land_cover.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:32643",
+        "layer_type": "vector",
+        "feature_count": null
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.34.8",
+      "os_info": "Ubuntu 22.04",
+      "python_version": "3.10.12",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "288c29f1-9a98-541d-abf3-e2c8b9914f2e",
+    "session_id": "832807f6-eaac-5701-8b79-6158b321b445",
+    "source": "post_hook",
+    "algorithm_id": "native:buffer",
+    "algorithm_name": "Buffer",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:05:10.000000+00:00",
+    "ended_at": "2026-08-08T10:05:11.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "DISTANCE": 0.01,
+      "SEGMENTS": 8,
+      "DISSOLVE": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "data/sample_points.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 8
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "data/derived/points_buffered.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 8
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.40.0",
+      "os_info": "Ubuntu 24.04",
+      "python_version": "3.12.3",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0",
+        "QuickMapServices": "0.19.34"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "fad6a234-bb5a-5784-992b-a5a5464d794a",
+    "session_id": "832807f6-eaac-5701-8b79-6158b321b445",
+    "source": "history_signal",
+    "algorithm_id": "native:extractbyattribute",
+    "algorithm_name": "Extract by attribute",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:05:20.000000+00:00",
+    "ended_at": "2026-08-08T10:05:21.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "FIELD": "category",
+      "OPERATOR": 0,
+      "VALUE": "urban"
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "data/derived/points_buffered.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 8
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "data/derived/urban.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      },
+      {
+        "param": "FAIL_OUTPUT",
+        "path": "data/derived/not_urban.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.40.0",
+      "os_info": "Ubuntu 24.04",
+      "python_version": "3.12.3",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0",
+        "QuickMapServices": "0.19.34"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "7aab737a-b616-513d-9799-d9b9e763697e",
+    "session_id": "832807f6-eaac-5701-8b79-6158b321b445",
+    "source": "post_hook",
+    "algorithm_id": "native:dissolve",
+    "algorithm_name": "Dissolve",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:05:30.000000+00:00",
+    "ended_at": "2026-08-08T10:05:32.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "FIELD": [
+        "category"
+      ],
+      "SEPARATE_DISJOINT": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "data/derived/urban.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      },
+      {
+        "param": "OVERLAY",
+        "path": "data/sample_areas.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "data/derived/urban_dissolved.gpkg",
+        "format": "GPKG",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 1
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.40.0",
+      "os_info": "Ubuntu 24.04",
+      "python_version": "3.12.3",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0",
+        "QuickMapServices": "0.19.34"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "db190cdf-8efb-5b4d-83ef-b8f7bd7266bb",
+    "session_id": "832807f6-eaac-5701-8b79-6158b321b445",
+    "source": "history_signal",
+    "algorithm_id": "native:centroids",
+    "algorithm_name": "Centroids",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:05:40.000000+00:00",
+    "ended_at": "2026-08-08T10:05:41.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "ALL_PARTS": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "data/derived/not_urban.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "data/derived/not_urban_centroids.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 4
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.40.0",
+      "os_info": "Ubuntu 24.04",
+      "python_version": "3.12.3",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0",
+        "QuickMapServices": "0.19.34"
+      }
+    },
+    "execution_log": null
+  },
+  {
+    "event_id": "893ca1c5-eff8-5b68-83ad-a8b6eb6b625b",
+    "session_id": "832807f6-eaac-5701-8b79-6158b321b445",
+    "source": "post_hook",
+    "algorithm_id": "native:buffer",
+    "algorithm_name": "Buffer",
+    "provider": "qgis",
+    "started_at": "2026-08-08T10:06:50.000000+00:00",
+    "ended_at": "2026-08-08T10:06:51.000000+00:00",
+    "status": "completed",
+    "parameters": {
+      "DISTANCE": 0.02,
+      "SEGMENTS": 8,
+      "DISSOLVE": false
+    },
+    "inputs": [
+      {
+        "param": "INPUT",
+        "path": "data/sample_points.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 8
+      }
+    ],
+    "outputs": [
+      {
+        "param": "OUTPUT",
+        "path": "data/derived/points_buffered.shp",
+        "format": "Shapefile",
+        "crs": "EPSG:4326",
+        "layer_type": "vector",
+        "feature_count": 8
+      }
+    ],
+    "agent": {
+      "qgis_version": "3.40.0",
+      "os_info": "Ubuntu 24.04",
+      "python_version": "3.12.3",
+      "plugin_versions": {
+        "GeoProvenance": "0.1.0",
+        "QuickMapServices": "0.19.34"
+      }
+    },
+    "execution_log": null
+  }
+]

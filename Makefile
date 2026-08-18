@@ -42,7 +42,6 @@ test-capture:
 
 fixtures:
 	$(PY) tests/fixtures/build_fixtures.py
-	@echo "RULES.md §3.4 step 5 — now tell Person B and Person C what changed."
 
 schema-check:
 	@$(PY) -c "import sqlite3,pathlib,tempfile,os; \

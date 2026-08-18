@@ -496,6 +496,7 @@ class ProvenanceStore:
         plugin_versions: Any = None,
         agent_id: str | None = None,
         env_fingerprint: str | None = None,
+        created_at: str | None = None,
     ) -> str:
         agent_id = agent_id or new_id()
         self._write(
@@ -510,7 +511,7 @@ class ProvenanceStore:
                 os_info,
                 python_version,
                 _json_or_none(plugin_versions),
-                utc_now_iso(),
+                created_at or utc_now_iso(),
                 env_fingerprint,
             ),
         )
@@ -532,6 +533,7 @@ class ProvenanceStore:
         plugin_versions: Any = None,
         label: str | None = None,
         agent_type: str = "software",
+        created_at: str | None = None,
     ) -> str:
         """One agent row per DISTINCT environment, reused across activities (§4.6).
 
@@ -554,6 +556,7 @@ class ProvenanceStore:
             python_version=python_version,
             plugin_versions=plugin_versions,
             env_fingerprint=fingerprint,
+            created_at=created_at,
         )
 
     # -- fingerprints (Person B writes these THROUGH here — §1.3) -----------
@@ -624,6 +627,7 @@ class ProvenanceStore:
         role: str | None = None,
         qgis_param_key: str | None = None,
         relation_id: str | None = None,
+        created_at: str | None = None,
     ) -> str:
         """Link two nodes.
 
@@ -654,7 +658,7 @@ class ProvenanceStore:
                 target_id,
                 role,
                 qgis_param_key,
-                utc_now_iso(),
+                created_at or utc_now_iso(),
             ),
         )
         return relation_id
@@ -690,9 +694,10 @@ class ProvenanceStore:
         description: str | None = None,
         session_id: str | None = None,
         workflow_id: str | None = None,
+        created_at: str | None = None,
     ) -> str:
         workflow_id = workflow_id or new_id()
-        now = utc_now_iso()
+        now = created_at or utc_now_iso()
         self._write(
             "INSERT INTO workflows (id, name, description, session_id, "
             "created_at, updated_at) VALUES (?,?,?,?,?,?)",
