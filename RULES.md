@@ -144,9 +144,12 @@ Keep that counter and report it. "The hook caught 98%, the history channel caugh
 
 ## §6 — Testing
 
-**§6.1 [HARD]** Two suites, kept separate:
-- `tests/storage/` — pure `sqlite3` + `pytest`, **no QGIS import at all**, runs anywhere.
-- `tests/capture/` — runs under `pytest-qgis`.
+**§6.1 [HARD]** Suites are split by *what they need to run*, not by what they test. Anything that can be verified without QGIS must be, because that is the suite that actually gets run:
+- `tests/storage/` — pure `sqlite3` + `pytest`, **no QGIS import at all**. The store, the migrations, the shared fixtures.
+- `tests/plugin/` — **no QGIS import at all**. The plugin layer's testable-anywhere parts: teardown bookkeeping, path resolution, logging fallback, packaging metadata, and the name contracts with Person C.
+- `tests/capture/` — runs under `pytest-qgis`. Only what genuinely needs a QGIS process.
+
+When a rule can only be observed inside QGIS (§5.4's clean unload, say), extract the *mechanism* into a module that imports no QGIS and test that; leave only the observation for `tests/capture/`.
 
 **§6.1.1** `pytest-qgis` registers a `pytest11` entrypoint that runs `from qgis.core import ...` at **plugin load time**, before any `conftest.py` executes. On a machine without QGIS this crashes pytest during startup, so a bare `pytest tests/storage` fails even though the storage suite itself imports zero QGIS — which would silently destroy the §4.1 guarantee. The storage suite is therefore always run as:
 

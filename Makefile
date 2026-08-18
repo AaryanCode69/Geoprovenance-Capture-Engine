@@ -11,14 +11,22 @@
 
 PY := .venv/bin/python
 
-.PHONY: help venv test test-storage test-capture fixtures demo1 demo2 demo3 schema-check clean
+.PHONY: help venv test test-storage test-plugin test-capture fixtures icon \
+        deploy undeploy qgis demo1 demo2 demo3 schema-check clean
 
 help:
 	@echo "make venv          create .venv and install dev dependencies"
-	@echo "make test          run everything that can run on this machine"
-	@echo "make test-storage  storage suite — no QGIS needed, runs anywhere (RULES.md §6.1)"
+	@echo "make test          everything that runs without QGIS (storage + plugin)"
+	@echo "make test-storage  storage suite — no QGIS needed (RULES.md §6.1)"
+	@echo "make test-plugin   plugin-layer suite — no QGIS needed (RULES.md §6.1)"
 	@echo "make test-capture  capture suite — needs QGIS + pytest-qgis"
+	@echo ""
+	@echo "make deploy        symlink the plugin into the geoprov-dev QGIS profile"
+	@echo "make undeploy      remove that symlink"
+	@echo "make qgis          launch QGIS on the geoprov-dev profile"
+	@echo ""
 	@echo "make fixtures      regenerate the fixtures Person B and C consume (RULES.md §3.4)"
+	@echo "make icon          regenerate geoprovenance/icon.png"
 	@echo "make schema-check  apply schema.sql to a throwaway database and report"
 	@echo "make demo1/2/3     run the Review 1 / Review 2 / Final demo"
 	@echo "make clean         remove caches, scratch dirs, and throwaway databases"
@@ -32,16 +40,31 @@ venv:
 	@$(PY) -c "import sys; print('  venv Python:', sys.version.split()[0])"
 	@echo "  In the QGIS Python console run:  import sys; sys.version"
 
-test: test-storage
+test: test-storage test-plugin
 
 test-storage:
 	$(PY) -m pytest tests/storage -q -p no:pytest_qgis
+
+test-plugin:
+	$(PY) -m pytest tests/plugin -q -p no:pytest_qgis
 
 test-capture:
 	$(PY) -m pytest tests/capture -q
 
 fixtures:
 	$(PY) tests/fixtures/build_fixtures.py
+
+icon:
+	$(PY) tools/make_icon.py
+
+deploy:
+	$(PY) tools/deploy.py link
+
+undeploy:
+	$(PY) tools/deploy.py unlink
+
+qgis:
+	qgis --profile geoprov-dev
 
 schema-check:
 	@$(PY) -c "import sqlite3,pathlib,tempfile,os; \

@@ -24,14 +24,71 @@ Everyone must develop and test against the **same Python version installed with 
 
 No external heavyweight dependencies (no `prov`, `rdflib`, `pydot`) — the project uses a custom lightweight PROV model and PyQt5-native visualization to keep the plugin dependency-free (see research doc §6.2, §6.5).
 
-Setup:
+---
+
+## Developer setup
+
+### 1. Environment
+
 ```bash
-python3 --version        # confirm 3.10+
 git clone <repo-url>
-cd geoprovenance
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pytest pytest-qgis
+cd Course-Project
+make venv            # creates .venv, installs dev deps, prints its Python version
+```
+
+**Check that version against QGIS.** In the QGIS Python console run `import sys; sys.version`. If it does not match what `make venv` printed, delete `.venv` and rebuild it against the QGIS interpreter. A mismatch between QGIS's bundled Python and a separately installed system Python is the most common source of "works for me" plugin bugs.
+
+### 2. Run the tests
+
+```bash
+make test            # everything that runs without QGIS — do this first
+make test-capture    # needs QGIS; run inside the dev profile
+```
+
+`make test` works on any machine, with no QGIS and no GIS stack installed. That is deliberate: it is what lets Person B and Person C build against the storage layer and the shared fixtures immediately.
+
+> Do not run `pytest tests/storage` directly — `pytest-qgis` imports `qgis.core` at plugin-load time, before any conftest, so a bare invocation crashes without QGIS and masks violations with it. The `make` targets pass `-p no:pytest_qgis`.
+
+### 3. A separate QGIS profile
+
+**Never develop against your normal QGIS profile.** A crash in capture code must not take out a working installation.
+
+```bash
+qgis --profile geoprov-dev     # creates it on first run; or: make qgis
+```
+
+### 4. Install the plugin into that profile
+
+```bash
+make deploy          # symlinks ./geoprovenance into the dev profile's plugins dir
+make deploy -- where # show the paths without changing anything
+```
+
+A symlink, not a copy — edit a file in the repo and the change is live. Then in QGIS: **Plugins → Manage and Install Plugins → Installed → tick GeoProvenance**.
+
+`make undeploy` removes the link. The script refuses to touch any profile other than `geoprov-dev`.
+
+### 5. The edit / reload loop
+
+Install **Plugin Reloader** (Plugins → Manage and Install Plugins → search "Plugin Reloader"), then set it to reload `geoprovenance`. The loop is:
+
+1. Edit a file in the repo.
+2. Click Plugin Reloader's button (or press its shortcut).
+3. Watch the **GeoProvenance** tab of **View → Panels → Log Messages** — a clean reload logs `unloaded cleanly`.
+
+If you see duplicate menu entries after a reload, something in `unload()` did not fire. That is a §5.4 bug, not a cosmetic one.
+
+### 6. Inspecting the output
+
+The provenance database lives at `<qgis profile>/geoprovenance/provenance.db`, overridable with the single QSettings key `GeoProvenance/database_path`. Open it with DB Browser for SQLite or the `sqlite3` CLI. **Plugins → GeoProvenance → Provenance database…** shows the active path.
+
+### Useful commands
+
+```bash
+make help            # list everything
+make fixtures        # regenerate the shared mock dataset (tell B and C if it changes)
+make schema-check    # apply schema.sql to a throwaway database and report
+make demo1           # run the Review 1 demo
 ```
 
 ---
