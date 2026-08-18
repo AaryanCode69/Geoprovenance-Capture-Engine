@@ -32,11 +32,10 @@ Critical rules
 
 Not in A1 (deliberate seams)
     §5.3  Installing the post-execution hook and saving/restoring the user's
-          ProcessingConfig POST_EXECUTION_SCRIPT is A3. When it lands, register
-          the restore on self._cleanup at the point the setting is changed.
+          ProcessingConfig POST_EXECUTION_SCRIPT — landed in A3.
     §5.10 Connecting QgsHistoryProviderRegistry.entryAdded and its QTimer
-          polling fallback is A5. Same rule: register the disconnect and the
-          timer stop as they are created.
+          polling fallback — landed in A5; the disconnect and the timer stop
+          are registered as they are created, same as everything else.
     A6    "Start new workflow" / "Name this workflow" menu actions.
 """
 
@@ -50,7 +49,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
 from . import paths
-from .capture import hooks
+from .capture import history_observer, hooks
 from .capture.engine import ProvenanceCaptureEngine
 from .lifecycle import CleanupStack
 from .log import CRITICAL, INFO, WARNING, log, log_exception
@@ -117,7 +116,7 @@ class GeoProvenancePlugin:
             f"(schema version {self.store.schema_version()})", INFO)
 
     def _start_capture(self) -> None:
-        """Start the engine and install both capture channels (A3).
+        """Start the engine and install all three capture channels (A3, A5).
 
         Without a database there is nowhere to write, so capture stays off
         rather than failing on every algorithm the user runs.
@@ -134,6 +133,13 @@ class GeoProvenancePlugin:
         for description, undo in hooks.install_all(
             self.engine, self.db_path.parent / "hooks"
         ):
+            self._cleanup.defer(description, undo)
+
+        # A5, channel 3. Installed after the hooks so that when both see one
+        # execution the hook wins the §5.9 race and the history entry arrives
+        # as the corroboration — which is the direction the RQ1 split is
+        # phrased in ("the hook caught 98%, the history channel the rest").
+        for description, undo in history_observer.install_history_observer(self.engine):
             self._cleanup.defer(description, undo)
 
     def _build_dock(self) -> None:

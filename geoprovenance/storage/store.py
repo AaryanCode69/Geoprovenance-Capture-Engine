@@ -886,6 +886,37 @@ class ProvenanceStore:
     def schema_version(self) -> int:
         return migrations.get_version(self._connection())
 
+    def channel_statistics(self) -> dict[str, dict[str, int]]:
+        """Per-channel capture split — the RQ1 result from §5.9 and §8.3.
+
+        ``{"post_hook": {"first": 47, "corroborations": 3}, ...}`` where
+        *first* is how many executions that channel was the first to see (it
+        won the race and inserted the row) and *corroborations* is how many
+        times a LATER channel confirmed one of those same executions.
+
+        This is the query behind "the hook caught 98%, the history channel
+        caught the other 2%" — §5.9 says keep that counter and report it,
+        because it is a genuine finding rather than bookkeeping.
+
+        Note what corroborations does NOT tell you: which channel did the
+        confirming. The schema counts confirmations per activity, not per
+        confirming channel, and adding that would be a §3.4 breaking change
+        for a number the RQ1 protocol does not ask for (§8.3 wants the
+        first-to-see split, which `first` is).
+        """
+        rows = self._connection().execute(
+            "SELECT coalesce(capture_channel, 'unknown') AS channel, "
+            "count(*) AS first, coalesce(sum(corroborations), 0) AS corroborations "
+            "FROM activities GROUP BY channel ORDER BY channel"
+        ).fetchall()
+        return {
+            row["channel"]: {
+                "first": int(row["first"]),
+                "corroborations": int(row["corroborations"]),
+            }
+            for row in rows
+        }
+
     def counts(self) -> dict[str, int]:
         """Row count per table — used by the RQ2 storage measurement (§8.6)."""
         conn = self._connection()
