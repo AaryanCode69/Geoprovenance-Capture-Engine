@@ -1,0 +1,24 @@
+[general]
+name=GeoProvenance
+qgisMinimumVersion=3.34
+description=Automatic W3C PROV-O provenance capture and reproducibility auditing for QGIS Processing workflows
+version=0.1.0
+author=Person A, Person B, Person C
+email=aaryanupadhyay68@gmail.com
+
+about=GeoProvenance automatically records every QGIS Processing operation, maps it to
+    the W3C PROV-O standard, fingerprints input and output datasets with SHA-256,
+    visualises the workflow as a graph, and produces a quantitative reproducibility
+    audit score. No external dependencies.
+
+tracker=
+repository=
+homepage=
+
+category=Plugins
+icon=icon.png
+experimental=True
+deprecated=False
+
+# Person A owns this file. qgisMinimumVersion is 3.34 (LTS) per RULES.md §2.5 —
+# any API newer than 3.34 must be feature-detected at runtime, not assumed.

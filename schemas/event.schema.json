@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/geoprovenance/event.schema.json",
+  "title": "GeoProvenance capture event",
+  "description": "DRAFT - NOT YET FROZEN. Emitted by geoprovenance/capture/normalizer.py, consumed by Person B's PROV mapper. Prose contract: docs/CONTRACT_event.md. Freezing procedure: RULES.md 3.1; change procedure after freezing: RULES.md 3.4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "session_id",
+    "source",
+    "algorithm_id",
+    "started_at",
+    "status",
+    "parameters",
+    "inputs",
+    "outputs",
+    "agent"
+  ],
+  "properties": {
+    "event_id": { "$ref": "#/$defs/uuid" },
+    "session_id": {
+      "$ref": "#/$defs/uuid",
+      "description": "Minted once at plugin startup. RULES.md 3.2 decision 5."
+    },
+    "source": {
+      "enum": ["post_hook", "history_signal"],
+      "description": "Which channel produced this. Used for dedup (RULES.md 5.9) and for the RQ1 per-channel split (RULES.md 8.3)."
+    },
+    "algorithm_id": { "type": "string", "minLength": 1, "examples": ["native:buffer"] },
+    "algorithm_name": { "type": ["string", "null"], "examples": ["Buffer"] },
+    "provider": { "type": ["string", "null"], "examples": ["qgis", "gdal", "grass", "saga"] },
+    "started_at": { "$ref": "#/$defs/timestamp" },
+    "ended_at": {
+      "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }],
+      "description": "Null is legal for a cancelled run that never completed."
+    },
+    "status": { "enum": ["completed", "failed", "cancelled"] },
+    "parameters": {
+      "type": "object",
+      "description": "Scalar parameters only. Layer-valued parameters are lifted into inputs/outputs (RULES.md 3.3). Always JSON-serializable; the normalizer falls back to repr() rather than raising (RULES.md 5.5).",
+      "additionalProperties": true
+    },
+    "inputs": { "type": "array", "items": { "$ref": "#/$defs/layerRef" } },
+    "outputs": { "type": "array", "items": { "$ref": "#/$defs/layerRef" } },
+    "agent": { "$ref": "#/$defs/agent" },
+    "execution_log": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "Microsecond-precision UTC ISO 8601. RULES.md 3.2 decision 4 - second resolution collides with fingerprints UNIQUE(entity_id, computed_at).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}([+-]\\d{2}:\\d{2}|Z)$"
+    },
+    "layerRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["param", "path", "layer_type"],
+      "properties": {
+        "param": {
+          "type": "string",
+          "description": "The original QGIS parameter key, unmodified: INPUT, OUTPUT, OVERLAY.",
+          "examples": ["INPUT", "OUTPUT", "OVERLAY"]
+        },
+        "path": {
+          "type": ["string", "null"],
+          "description": "NULL for memory:, TEMPORARY_OUTPUT and /vsimem/ layers. Person B MUST NOT attempt to fingerprint a null path (RULES.md 3.3)."
+        },
+        "format": {
+          "type": ["string", "null"],
+          "description": "From the provider/driver name, NOT the file extension - a .gpkg can hold vector or raster (RULES.md 5.8)."
+        },
+        "crs": {
+          "type": ["string", "null"],
+          "description": "authid() such as EPSG:4326. WKT only when the CRS has no authid (RULES.md 5.7)."
+        },
+        "layer_type": {
+          "enum": ["vector", "raster", "table", "unknown"],
+          "description": "Set even when path is null."
+        },
+        "feature_count": {
+          "type": ["integer", "null"],
+          "description": "Vectors only. OPEN: the raster equivalent (bands, pixel size, dimensions) is undecided - see docs/CONTRACT_event.md."
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["qgis_version", "os_info", "python_version"],
+      "properties": {
+        "qgis_version": { "type": "string" },
+        "os_info": { "type": "string" },
+        "python_version": { "type": "string" },
+        "plugin_versions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Test configuration only. GeoProvenance is a QGIS plugin, not a pip package —
+# it is deployed by copying/symlinking geoprovenance/ into the QGIS profile's
+# plugins directory, so there is no [project] or build-system table here.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+markers = [
+    "qgis: requires a running QGIS environment (pytest-qgis). Storage tests must NEVER carry this marker — see RULES.md §4.1, §6.1.",
+]

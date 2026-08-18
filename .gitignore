@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# QGIS
+*.qgs~
+*.qgz~
+.qgis2/
+geoprov-dev/
+
+# Runtime provenance databases (RULES.md §10.4)
+# NOTE: tests/fixtures/*.db is deliberately NOT ignored — it is a shared
+# contract artefact consumed by Person B and Person C (RULES.md §10.3).
+*.db
+*.db-wal
+*.db-shm
+!tests/fixtures/*.db
+demos/_scratch/
+
+# Benchmark datasets — too large to version.
+# experiments/README.md documents how to fetch them. (RULES.md §10.4)
+experiments/data/
+*.tif
+*.tiff
+*.jp2
+!tests/fixtures/data/**
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
