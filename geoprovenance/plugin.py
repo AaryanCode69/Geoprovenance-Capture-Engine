@@ -10,6 +10,14 @@ Responsibilities
     - Install the post-execution hook, saving and later restoring the user's
       previous ProcessingConfig POST_EXECUTION_SCRIPT value (RULES.md §5.3).
 
+    - Resolve the database location and construct the ProvenanceStore.
+      This lives HERE, not in storage/, because the default path comes from
+      QgsApplication.qgisSettingsDirPath() and §4.1 forbids QGIS imports under
+      storage/. ProvenanceStore takes an explicit path for exactly this reason.
+      §4.8 [HARD]: the per-project override must be ONE configuration value —
+      Phase 2 points Person C's viewer and audit engine at the live database by
+      changing exactly one thing.
+
 Critical rules
     §5.3  Never clobber the user's existing POST_EXECUTION_SCRIPT setting.
     §5.4  unload() must disconnect every signal, stop every QTimer, un-patch

@@ -37,9 +37,22 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-As of this file's creation the repo contains **only the three markdown documents above plus this file and `RULES.md`**. No plugin code, no tests, no database, no fixtures exist yet. It is **not yet a git repository** (`git init` still required).
+**Built and passing (58 storage tests, `make test-storage`):**
 
-Everything in §4 below is the **target** layout, not the current one. Never describe unwritten code as existing.
+- `storage/schema.sql` — 8 tables, 9 indices, `user_version = 1`. Draft, not yet `contract-v1`.
+- `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code.
+- `storage/store.py` — **A2 complete.** `ProvenanceStore` with the full §4.5 method surface, `transaction()` with savepoint nesting, per-thread connections + write lock, WAL + foreign keys.
+- `tests/storage/` — 52 store tests + 6 no-QGIS guard tests.
+- `demos/_presenter.py` — the §7.7 demo output format plus the plain-language linter.
+- `schemas/event.schema.json` — draft, validates the A0.2 example.
+
+**Stubs only** (docstring + rules + `NotImplementedError`): everything under `capture/`, plus `plugin.py`, `storage/workflows.py` (A6), `tests/fixtures/build_fixtures.py` (A0.3), and the three demo scripts.
+
+**Not started:** A0.3 fixtures, A1 plugin skeleton, A3–A6, Phase 2, Phase 3.
+
+**Known gap carried over from A2:** the default database location (§4.8 — plugin profile dir via `QgsApplication.qgisSettingsDirPath()`, overridable per project) is *not* in `storage/`, because that call needs QGIS and §4.1 forbids it there. It belongs in the plugin layer and is A1 work. `ProvenanceStore` takes an explicit path.
+
+Never describe unwritten code as existing; update this section when that changes.
 
 ## 4. Target repository layout
 
