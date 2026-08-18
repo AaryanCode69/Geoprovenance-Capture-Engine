@@ -413,3 +413,111 @@ def test_the_event_the_engine_writes_matches_the_contract(engine, agent_block):
     )
     result = engine.record_event(event)
     assert result.recorded
+
+
+# ===========================================================================
+# workflow grouping (A6)
+# ===========================================================================
+
+def _buffer(engine, source, written, *, started_at):
+    """One captured job reading `source` and writing `written`."""
+    return engine.record_algorithm_execution(
+        algorithm_id="native:buffer", algorithm_name="Buffer",
+        parameters={"INPUT": source, "OUTPUT": written, "DISTANCE": 500},
+        parameter_definitions=FakeAlgorithmDefinitions.BUFFER,
+        results={"OUTPUT": written},
+        started_at=started_at,
+    )
+
+
+def test_capturing_a_chain_groups_it_without_being_asked(engine, store):
+    """The Review 2 claim, at the engine level: nobody calls the grouper —
+    capture does, after the record is safely committed."""
+    _buffer(engine, "/data/roads.shp", "/work/step1.shp",
+            started_at="2026-08-08T10:00:00.000000+00:00")
+    _buffer(engine, "/work/step1.shp", "/work/step2.shp",
+            started_at="2026-08-08T10:01:00.000000+00:00")
+
+    workflows = store.find_workflows_by_session(engine.session_id)
+    assert len(workflows) == 1, "two linked jobs are one piece of work"
+
+    graph = store.get_workflow_graph(workflows[0]["id"])
+    assert [a["algorithm_id"] for a in graph["activities"]] == [
+        "native:buffer", "native:buffer",
+    ]
+    assert workflows[0]["name"] == "Buffer, then Buffer"
+
+
+def test_grouping_follows_the_event_not_the_engine(engine, store):
+    """An event replayed from the fixtures carries its own session id — the
+    Review 2 demo does exactly that (§7.3). Grouping must follow the row that
+    was written, not the engine's own session."""
+    other = "99999999-9999-4999-8999-999999999999"
+    assert other != engine.session_id
+
+    event = normalizer.build_event(
+        algorithm_id="native:buffer", algorithm_name="Buffer",
+        session_id=other, started_at=utc_now_iso(), ended_at=utc_now_iso(),
+        parameters=dict(BUFFER_PARAMS),
+        parameter_definitions=FakeAlgorithmDefinitions.BUFFER,
+        agent={"qgis_version": "3.34.8", "os_info": "Linux", "python_version": "3.10.12",
+               "plugin_versions": {}},
+    )
+    assert engine.record_event(event).recorded
+
+    assert store.find_workflows_by_session(other), "the replayed session was grouped"
+    assert not store.find_workflows_by_session(engine.session_id)
+
+
+def test_a_grouping_failure_never_reaches_the_user(engine, monkeypatch):
+    """§5.1 [HARD] — grouping is the SHOULD-have half of chaining; the record
+    is the MUST-have and is already committed by the time this runs."""
+    from geoprovenance.storage import workflows as workflows_module
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("grouping is broken")
+
+    monkeypatch.setattr(workflows_module, "group_session", explode)
+    assert engine.group_session() == []
+
+    result = _buffer(engine, "/data/roads.shp", "/out/buffered.shp",
+                     started_at=utc_now_iso())
+    assert result.recorded, "the job is still written down"
+
+
+def test_starting_a_new_workflow_separates_what_follows(engine, store):
+    """Appendix B.5 — session_id IS the grouping key, so a new one is the
+    whole mechanism behind the 'Start new workflow' menu action."""
+    _buffer(engine, "/data/roads.shp", "/work/step1.shp",
+            started_at="2026-08-08T10:00:00.000000+00:00")
+    first_session = engine.session_id
+
+    second_session = engine.begin_new_workflow()
+    assert second_session != first_session
+
+    # Reads the file the previous job wrote — linked by data, separated by the
+    # boundary the user drew on purpose.
+    _buffer(engine, "/work/step1.shp", "/work/step2.shp",
+            started_at="2026-08-08T10:01:00.000000+00:00")
+
+    assert len(store.find_workflows_by_session(first_session)) == 1
+    assert len(store.find_workflows_by_session(second_session)) == 1
+
+
+def test_earlier_work_is_left_alone_by_a_new_workflow(engine, store):
+    """Nothing is rewritten — the jobs already captured keep their session."""
+    _buffer(engine, "/data/roads.shp", "/work/step1.shp",
+            started_at="2026-08-08T10:00:00.000000+00:00")
+    first_session = engine.session_id
+    before = store.get_workflow_graph(
+        store.find_workflows_by_session(first_session)[0]["id"]
+    )
+
+    engine.begin_new_workflow()
+
+    after = store.get_workflow_graph(
+        store.find_workflows_by_session(first_session)[0]["id"]
+    )
+    assert [a["id"] for a in after["activities"]] == [
+        a["id"] for a in before["activities"]
+    ]

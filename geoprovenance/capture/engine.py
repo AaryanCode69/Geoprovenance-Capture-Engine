@@ -37,6 +37,7 @@ import uuid
 from typing import Any
 
 from ..log import CRITICAL, INFO, log, log_exception
+from ..storage import workflows
 from ..storage.store import ProvenanceStore, utc_now_iso
 from . import environment, normalizer
 
@@ -242,6 +243,18 @@ class ProvenanceCaptureEngine:
         log(f"recorded {event['algorithm_id']} "
             f"({len(event.get('inputs') or [])} in, "
             f"{len(event.get('outputs') or [])} out) via {event['source']}", INFO)
+
+        # A6 — regroup AFTER the commit above, never inside it. Whether two
+        # jobs belong together can change when a later job appears (§5.12), so
+        # this is a recomputation over the session rather than a placement of
+        # the row just written.
+        #
+        # Grouped by the EVENT's session, not the engine's. They are the same
+        # value for anything the hooks produce, but they are not the same
+        # field: an event replayed from tests/fixtures (the Review 2 demo does
+        # exactly that, §7.3) carries its own session id, and grouping the
+        # engine's instead would silently group nothing.
+        self.group_session(event["session_id"])
         return CaptureResult(activity_id=activity_id, recorded=True)
 
     def _agent_row(self, agent: dict) -> str:
@@ -346,6 +359,49 @@ class ProvenanceCaptureEngine:
             layer_type=layer.get("layer_type") or "unknown",
             metadata=metadata or None,
         )
+
+    # -- workflow grouping (A6) --------------------------------------------
+
+    def group_session(self, session_id: str | None = None) -> list[str]:
+        """Regroup a session's jobs into workflows. Never raises (§5.1).
+
+        Defaults to this engine's own session, which is what the menu action
+        and the tests want; ``record_event`` passes the session the row it
+        just wrote actually belongs to.
+
+        Runs after the capture transaction has committed, so a failure here
+        costs the grouping and not the record. Grouping is the SHOULD-have
+        half of multi-step chaining (§9.3); the activity rows are the
+        MUST-have and are already safely written by the time this runs.
+
+        Cost note for RQ2: this is O(session size) queries per captured job,
+        so a session accumulates O(n^2) grouping work across n jobs. Small and
+        indexed (idx_activities_session), and measured rather than assumed —
+        it falls inside the §8.4 measured window and is attributed to the
+        grouping stage there.
+        """
+        try:
+            return workflows.group_session(self.store, session_id or self.session_id)
+        except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+            log_exception("workflow grouping", exc)
+            return []
+
+    def begin_new_workflow(self) -> str:
+        """Start a fresh workflow boundary. Returns the new session id.
+
+        The manual override from PERSON_A.md §A6. Implemented by minting a new
+        ``session_id`` rather than by adding a boundary marker, because
+        ``session_id`` is ALREADY the grouping key (Appendix B.5) — a separate
+        marker would be a second mechanism for one idea, and a §3.4 schema
+        change on top.
+
+        Jobs already captured keep the old session id and stay in the
+        workflows they were grouped into. Nothing is rewritten.
+        """
+        self.group_session()  # settle the outgoing session before leaving it
+        self.session_id = str(uuid.uuid4())
+        log(f"started a new workflow (session {self.session_id})", INFO)
+        return self.session_id
 
     # -- diagnostics -------------------------------------------------------
 

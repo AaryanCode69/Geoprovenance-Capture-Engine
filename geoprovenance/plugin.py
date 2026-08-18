@@ -36,7 +36,9 @@ Not in A1 (deliberate seams)
     §5.10 Connecting QgsHistoryProviderRegistry.entryAdded and its QTimer
           polling fallback — landed in A5; the disconnect and the timer stop
           are registered as they are created, same as everything else.
-    A6    "Start new workflow" / "Name this workflow" menu actions.
+    A6    "Start new workflow" / "Name this workflow" menu actions — landed
+          in A6. Both are thin: the mechanism is the engine's session id and
+          storage/workflows.py, and nothing about grouping is decided here.
 """
 
 from __future__ import annotations
@@ -46,13 +48,14 @@ import uuid
 
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction, QInputDialog, QMessageBox
 
 from . import paths
 from .capture import history_observer, hooks
 from .capture.engine import ProvenanceCaptureEngine
 from .lifecycle import CleanupStack
 from .log import CRITICAL, INFO, WARNING, log, log_exception
+from .storage import workflows
 from .storage.store import ProvenanceStore
 from .ui.dock import DEFAULT_DOCK_AREA, GeoProvenanceDockWidget
 
@@ -162,6 +165,14 @@ class GeoProvenancePlugin:
             tip="Show or hide the GeoProvenance panel",
         )
         self._add_action(
+            icon, "Start new workflow", self._start_new_workflow,
+            tip="Record what follows as a separate piece of work",
+        )
+        self._add_action(
+            icon, "Name this workflow…", self._name_workflow,
+            tip="Give the work recorded so far a name you will recognise",
+        )
+        self._add_action(
             icon, "Provenance database…", self._show_database_info,
             tip="Where the provenance record is being written",
         )
@@ -193,6 +204,102 @@ class GeoProvenancePlugin:
         if self.dock is None:
             return
         self.dock.setVisible(not self.dock.isVisible())
+
+    def _start_new_workflow(self) -> None:
+        """A6's manual override — draw a boundary the file paths cannot see.
+
+        Auto-grouping links jobs that share files (§5.12). That is right most
+        of the time and wrong exactly when a person moves on to a different
+        piece of work that happens to start from the same file. This is how
+        they say so.
+        """
+        if self.engine is None:
+            QMessageBox.warning(
+                self.iface.mainWindow(), PLUGIN_NAME,
+                "Nothing is being recorded at the moment, so there is no work "
+                "to separate.\n\nSee the GeoProvenance tab of the Log Messages "
+                "panel for the reason.",
+            )
+            return
+
+        self.engine.begin_new_workflow()
+        self.session_id = self.engine.session_id
+        QMessageBox.information(
+            self.iface.mainWindow(), PLUGIN_NAME,
+            "Started a new piece of work.\n\nJobs from here on are recorded "
+            "separately from what came before, even if they use the same "
+            "files. Everything already written down is untouched.",
+        )
+
+    def _name_workflow(self) -> None:
+        """Give one piece of work a name a person chose.
+
+        Asks WHICH first, because one QGIS session can hold several pieces of
+        work — two unrelated jobs, or a job that branched. Picking silently
+        would rename the wrong one exactly when it matters.
+        """
+        if self.store is None or self.engine is None:
+            QMessageBox.warning(
+                self.iface.mainWindow(), PLUGIN_NAME,
+                "Nothing is being recorded at the moment.\n\nSee the "
+                "GeoProvenance tab of the Log Messages panel for the reason.",
+            )
+            return
+
+        choices = self._workflow_choices()
+        if not choices:
+            QMessageBox.information(
+                self.iface.mainWindow(), PLUGIN_NAME,
+                "No work has been recorded yet in this QGIS session.\n\nRun "
+                "a job from the Processing toolbox and it will appear here.",
+            )
+            return
+
+        labels = [label for label, _ in choices]
+        label, chose = QInputDialog.getItem(
+            self.iface.mainWindow(), PLUGIN_NAME,
+            "Which piece of work?", labels, 0, False,
+        )
+        if not chose:
+            return
+        workflow_id = dict(choices)[label]
+
+        name, confirmed = QInputDialog.getText(
+            self.iface.mainWindow(), PLUGIN_NAME, "Call it:",
+        )
+        if not confirmed:
+            return
+
+        # A blank name is dropped rather than stored — name_workflow already
+        # guarantees that, and the column is NOT NULL.
+        workflows.name_workflow(self.store, workflow_id, name)
+
+    def _workflow_choices(self) -> list[tuple[str, str]]:
+        """(what to show the user, workflow id) for this session's work.
+
+        Shown by name and step count rather than by id: an id is not something
+        a person can recognise, and this dialog is demo surface (§7.5).
+        """
+        members: dict[str, int] = {}
+        for row in self.store.list_session_workflow_members(self.engine.session_id):
+            members[row["workflow_id"]] = members.get(row["workflow_id"], 0) + 1
+
+        choices: list[tuple[str, str]] = []
+        seen: dict[str, int] = {}
+        for workflow in self.store.find_workflows_by_session(self.engine.session_id):
+            steps = members.get(workflow["id"], 0)
+            plural = "" if steps == 1 else "s"
+            label = f"{workflow['name']}  ({steps} job{plural})"
+
+            # Two pieces of work can genuinely look identical — one Buffer
+            # each, say. The label is what comes back from the dialog, so a
+            # repeat would rename whichever one happened to be first.
+            seen[label] = seen.get(label, 0) + 1
+            if seen[label] > 1:
+                label = f"{label} #{seen[label]}"
+
+            choices.append((label, workflow["id"]))
+        return choices
 
     def _show_database_info(self) -> None:
         """Deliberately plain language — this dialog is demo surface (§7.5)."""

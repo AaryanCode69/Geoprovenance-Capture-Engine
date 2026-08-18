@@ -728,6 +728,126 @@ class ProvenanceStore:
             (workflow_id, activity_id, sequence_order),
         )
 
+    def set_workflow_activities(
+        self, *, workflow_id: str, activity_ids: Sequence[str]
+    ) -> None:
+        """Replace a workflow's membership with ``activity_ids``, in that order.
+
+        Idempotent, which add_workflow_activity is not — the primary key is
+        ``(workflow_id, activity_id)``, so re-running the grouping over a
+        session would otherwise fail on the second pass. A6's grouping is a
+        recomputation, not an append, so it needs the replacing form.
+
+        ``sequence_order`` is the position in the sequence given. The caller
+        orders by ``started_at`` (§5.12); this method does not reorder, because
+        the temporal decision belongs with the grouping logic and not in SQL.
+        """
+        with self.transaction() as conn:
+            conn.execute(
+                "DELETE FROM workflow_activities WHERE workflow_id = ?", (workflow_id,)
+            )
+            conn.executemany(
+                "INSERT INTO workflow_activities "
+                "(workflow_id, activity_id, sequence_order) VALUES (?,?,?)",
+                [(workflow_id, aid, order) for order, aid in enumerate(activity_ids)],
+            )
+            conn.execute(
+                "UPDATE workflows SET updated_at = ? WHERE id = ?",
+                (utc_now_iso(), workflow_id),
+            )
+
+    def update_workflow(
+        self,
+        workflow_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> None:
+        """Rename or re-describe a workflow. Backs A6's "Name this workflow".
+
+        Only the fields given are touched, so naming a workflow cannot wipe
+        its description. Always moves ``updated_at`` — before this, that column
+        was written once at insert and never again, which made it a lie.
+        """
+        fields: list[str] = []
+        values: list[Any] = []
+        if name is not None:
+            fields.append("name = ?")
+            values.append(name)
+        if description is not None:
+            fields.append("description = ?")
+            values.append(description)
+        if not fields:
+            return
+
+        fields.append("updated_at = ?")
+        values.extend([utc_now_iso(), workflow_id])
+        self._write(f"UPDATE workflows SET {', '.join(fields)} WHERE id = ?", tuple(values))
+
+    def delete_workflow(self, workflow_id: str) -> None:
+        """Remove a workflow. Its membership rows cascade; activities survive.
+
+        Used when A6's grouping merges two workflows and one is left empty.
+        The activities themselves are never deleted — they are the record.
+        """
+        self._write("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+
+    def find_workflows_by_session(self, session_id: str) -> list[dict[str, Any]]:
+        """Workflows grouped out of one QGIS session, oldest first.
+
+        Oldest first because A6's merge policy keeps the oldest workflow of an
+        overlapping set, so that a name the user already gave one survives a
+        later regrouping.
+        """
+        return _rows_to_dicts(
+            self._connection().execute(
+                "SELECT * FROM workflows WHERE session_id = ? ORDER BY created_at",
+                (session_id,),
+            )
+        )
+
+    def list_session_datasets(self, session_id: str) -> list[dict[str, Any]]:
+        """(activity_id, file_path) for every dataset touched in one session.
+
+        The input to A6's grouping: two activities that touch a common path
+        belong to the same workflow. One query rather than a
+        ``get_relations_for`` per activity, because a 15-operation workflow
+        would otherwise be 15 round trips inside the user's QGIS session.
+
+        Direction is deliberately NOT returned. Grouping asks "are these
+        connected?", which is undirected; Person B separately infers *directed*
+        ``wasDerivedFrom`` edges from the same paths (§5.12). Handing direction
+        to the grouper would invite it to quietly become B's job.
+        """
+        return _rows_to_dicts(
+            self._connection().execute(
+                "SELECT DISTINCT a.id AS activity_id, e.file_path AS file_path "
+                "FROM activities a "
+                "JOIN relations r ON r.source_id = a.id OR r.target_id = a.id "
+                "JOIN entities e ON e.id = r.source_id OR e.id = r.target_id "
+                "WHERE a.session_id = ? AND e.file_path IS NOT NULL "
+                "AND r.relation_type IN ('used', 'wasGeneratedBy')",
+                (session_id,),
+            )
+        )
+
+    def list_session_workflow_members(self, session_id: str) -> list[dict[str, Any]]:
+        """(workflow_id, activity_id) for every workflow grouped from a session.
+
+        A6 regroups a whole session at once and has to reconcile what it
+        computes against what is already stored, so it needs the existing
+        membership in one query rather than one per workflow.
+        """
+        return _rows_to_dicts(
+            self._connection().execute(
+                "SELECT wa.workflow_id, wa.activity_id, wa.sequence_order "
+                "FROM workflow_activities wa "
+                "JOIN workflows w ON w.id = wa.workflow_id "
+                "WHERE w.session_id = ? ORDER BY wa.sequence_order",
+                (session_id,),
+            )
+        )
+
     def get_workflow(self, workflow_id: str) -> dict[str, Any] | None:
         return _row_to_dict(
             self._connection()

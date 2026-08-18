@@ -37,7 +37,7 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-**Built and passing — 193 tests, `make test`, no QGIS required:**
+**Built and passing — 298 tests, `make test`, no QGIS required:**
 
 - `storage/schema.sql` — 8 tables, 9 indices, `user_version = 1`. Draft, not yet `contract-v1`.
 - `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code.
@@ -45,15 +45,19 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `tests/fixtures/` — **A0.3 complete.** `mock_provenance.db` (3 workflows, 16 jobs, 23 datasets, 70 relations), `mock_events.json`, `mock_ids.json`, real Shapefile + GeoPackage in `data/`, all regenerable and byte-deterministic via `make fixtures`. **B and C are unblocked** — see `tests/fixtures/README.md`.
 - `plugin.py`, `ui/dock.py`, `lifecycle.py`, `paths.py`, `log.py`, `icon.png` — **A1**, written, not yet run in QGIS (see below).
 - `capture/normalizer.py` + `capture/engine.py` — **A3 core, complete and tested.** Both import zero QGIS (they duck-type), so the whole write path is verifiable here. 70 tests.
-- `capture/hooks.py` — **A3, QGIS-only, UNVERIFIED.** Post-execution hook installer + `processing.run` monkeypatch.
-- `capture/environment.py` — agent probe, degrades outside QGIS.
+- `capture/hooks.py` — **A3/A5, QGIS-only, UNVERIFIED.** Pre- and post-execution hook installers + `processing.run` monkeypatch.
+- `capture/history_observer.py` — **A5 complete.** `entryAdded` observer plus the `QTimer` polling fallback; the QGIS-facing halves are UNVERIFIED, the parsing and dedup are not.
+- `capture/environment.py` — **A6 hardened.** Agent probe, degrades outside QGIS. Records **every installed** plugin (`available_plugins`) as of 19 Aug 2026 — see the note below.
+- `storage/workflows.py` — **A6 complete.** Session → workflow grouping: shared-path connected components, `sequence_order` by `started_at`, `suggest_name`, and a reconciliation that keeps a user-given name across a merge. 26 tests.
+- `plugin.py` menu — **A6**: "Start new workflow" and "Name this workflow…" registered through `_add_action`, so their teardown is registered with them. The dialogs themselves are UNVERIFIED.
 - `demos/review1.py` + `docs/demos/REVIEW-1.md` — **the Review 1 gate**, passing. Drives the real `handle_post_execution` path, no QGIS needed.
+- `demos/review2.py` + `docs/demos/REVIEW-2.md` — **the Review 2 gate**, passing (`make demo2`, 6/6, under a second, byte-identical run to run). Replays four recorded jobs through the real `record_event` path.
 - `tools/deploy.py`, `tools/make_icon.py`, `make deploy` / `make qgis`.
 - `schemas/event.schema.json` — draft; fixture events and built events both validate.
 
-**Stubs only** (docstring + rules): `capture/history_observer.py` (A5), `storage/workflows.py` (A6), `demos/review2.py`, `demos/final.py`.
+**Stubs only** (docstring + rules): `demos/final.py`.
 
-**Not started:** A4 (normalizer hardening), A5, A6, Phase 2, Phase 3.
+**Not started:** Phase 2, Phase 3. **Phase 1 (A1–A6) is code-complete**; its exit criteria that need QGIS are not met and cannot be met here.
 
 ### What is UNVERIFIED and why
 
@@ -66,10 +70,14 @@ Nothing that requires a QGIS process has ever been executed — QGIS is not inst
 | What variables QGIS puts in the hook namespace | `capture/hooks.py` | `handle_post_execution` logs the names it received — paste into `docs/capture_coverage.md` §4 |
 | Which invocation paths fire the hook (§5.11 — this is RQ1 evidence) | — | the coverage table |
 | Fixture `.shp` / `.gpkg` open in QGIS | `tests/fixtures/data/` | drag onto the canvas |
+| `qgis.utils.available_plugins` exists and is what A6 assumes | `capture/environment.py` | the `plugin_versions` block of the first captured job |
+| The A6 menu dialogs ("Start new workflow", "Name this workflow…") | `plugin.py` | click them; the record's grouping is the visible effect |
 
 The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven.
 
-**Known limitation carried into A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it. Until then, **do not report `post_hook` durations in RQ2** — noted in `docs/capture_coverage.md` §4.
+**Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but whether `PRE_EXECUTION_SCRIPT` exists and fires on the same paths is itself unverified, so **do not report `post_hook` durations in RQ2** until a row in `docs/capture_coverage.md` §4 confirms it.
+
+**Environment fingerprint changed in A6 (19 Aug 2026).** `environment.plugin_versions()` moved from `qgis.utils.active_plugins` (loaded) to `available_plugins` (installed), closing the `docs/CONTRACT_event.md` decision of 18 Aug. Agent rows written before and after describe the same machine but are not the same row — do not compare an RQ2 agent-row count naively across that date.
 
 Never describe unwritten code as existing; update this section when that changes.
 

@@ -54,22 +54,34 @@ def plugin_versions() -> dict[str, str]:
     have registered a Processing provider or shadowed an algorithm id — so it
     belongs in §4.6's environment fingerprint.
 
-    UNVERIFIED / TODO(A6): the code below does NOT yet match that decision. It
-    iterates ``qgis.utils.active_plugins``, which is the *loaded* set. The fix
-    is to iterate ``qgis.utils.available_plugins`` instead, keeping the
-    per-plugin try/except. Deferred to A6 (where this module is hardened)
-    because it cannot be verified without a running QGIS (§11.4), and because
-    widening the set changes every environment fingerprint — which must happen
-    once, deliberately, not as a side effect of A4.
+    Widened to ``available_plugins`` in A6 (19 Aug 2026), from
+    ``active_plugins`` — the *loaded* set — which A4 shipped and flagged as
+    not matching the decision. Done once and deliberately, because it changes
+    every environment fingerprint from here on: agent rows written before and
+    after this change describe the same machine but will not be the same row
+    (§4.6). Recorded in docs/capture_coverage.md §4 so an RQ2 agent-row count
+    is not compared naively across the boundary.
+
+    UNVERIFIED (§11.4): no QGIS on this machine, so the attribute names are
+    from the API docs and have never been read from a running build. Both the
+    fallback and the per-plugin try/except exist for that reason — an
+    environment probe that raises would take the user's run down with it
+    (§5.1), and a probe that returns nothing loses the whole agent record.
     """
     try:
         from qgis import utils as qgis_utils
     except ImportError:
         return {}
 
+    installed = getattr(qgis_utils, "available_plugins", None)
+    if not installed:
+        # Older build, or the attribute is not what the docs say. The loaded
+        # set is a strict subset and a narrower answer beats no answer.
+        installed = getattr(qgis_utils, "active_plugins", None)
+
     versions: dict[str, str] = {}
     try:
-        for name in list(getattr(qgis_utils, "active_plugins", []) or []):
+        for name in list(installed or []):
             try:
                 metadata = qgis_utils.pluginMetadata(name, "version")
             except Exception:  # noqa: BLE001 — one bad plugin must not stop the probe

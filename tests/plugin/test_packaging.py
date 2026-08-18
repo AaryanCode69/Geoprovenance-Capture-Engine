@@ -193,6 +193,34 @@ def test_every_ui_registration_has_a_matching_removal():
     assert not unbalanced, "RULES.md §5.4 violation: " + "; ".join(unbalanced)
 
 
+def test_the_a6_menu_actions_exist_and_go_through_the_cleanup_helper():
+    """PERSON_A.md §A6 requires a manual override in the plugin menu.
+
+    Checked at source level because the handlers open QGIS dialogs and this
+    suite runs with no QGIS (§6.1). What is worth checking here anyway: both
+    actions are registered through _add_action, which is what registers their
+    own teardown — an action added directly would leave a menu entry behind
+    after a Plugin Reloader cycle (§5.4).
+    """
+    cls = _class(_parse(PLUGIN / "plugin.py"), "GeoProvenancePlugin")
+    methods = {node.name for node in cls.body if isinstance(node, ast.FunctionDef)}
+    assert {"_start_new_workflow", "_name_workflow"} <= methods
+
+    build = next(node for node in cls.body
+                 if isinstance(node, ast.FunctionDef) and node.name == "_build_actions")
+    handlers = {
+        node.attr
+        for call in ast.walk(build)
+        if isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "_add_action"
+        for node in call.args
+        if isinstance(node, ast.Attribute)
+    }
+    assert {"_start_new_workflow", "_name_workflow"} <= handlers, (
+        "the A6 actions must be registered through _add_action so their "
+        "removal is registered with them (RULES.md §5.4)"
+    )
+
+
 def test_every_signal_connection_has_a_matching_disconnect():
     """§5.4 — a signal left connected after unload fires into a dead object."""
     cls = _class(_parse(PLUGIN / "plugin.py"), "GeoProvenancePlugin")
