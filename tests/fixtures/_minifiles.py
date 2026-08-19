@@ -152,7 +152,7 @@ _SQLITE_VERSION_FIELD = slice(92, 100)
 
 
 def normalise_sqlite_header(path) -> None:
-    """Blank the SQLite-version stamp so the file is byte-identical anywhere.
+    """Blank the SQLite-version stamp — the largest single source of byte drift.
 
     Everything else in this module is written for byte determinism — a fixed
     ``last_change``, a fixed page size, no autoincrement drift — because the
@@ -165,6 +165,17 @@ def normalise_sqlite_header(path) -> None:
     ``mock_provenance.db``. The result was that Person B and Person C could not
     reproduce the committed fixtures on their own machines at all, and the test
     that noticed blamed them for hand-editing.
+
+    Necessary, but NOT sufficient, and the difference matters to whoever reads
+    this next. The stamp is the only cross-version difference between 3.51.2
+    and 3.53.4, but 3.40.1 also leaves three stale bytes (``02 80 00 4b``) in
+    the free space of the schema page where 3.53.4 leaves zeros, and a library
+    built without ``SQLITE_SECURE_DELETE`` leaves about a thousand such bytes
+    at any version. ``VACUUM`` and ``VACUUM INTO`` reproduce the residue rather
+    than erasing it, so there is nothing further to do here: the committed
+    SQLite files are reproducible by their CONTENTS, not by their bytes. See
+    ``_logical_content`` in tests/storage/test_fixtures.py and the "Across
+    machines" section of this directory's README.
 
     Test-only. Nothing under ``geoprovenance/`` may call this: the plugin must
     never rewrite bytes underneath SQLite.

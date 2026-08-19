@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import pathlib
+import shutil
 import sqlite3
 import struct
 import sys
@@ -350,11 +351,26 @@ _SQLITE_SUFFIXES = (".db", ".gpkg")
 def _logical_content(path: pathlib.Path) -> bytes:
     """A canonical dump of a SQLite file, independent of the SQLite build.
 
-    Bytes 96-99 of every SQLite file are SQLITE_VERSION_NUMBER — the version of
-    the library that wrote it — and later releases also shift page layout
-    slightly. So a byte comparison of a committed .db against a fresh build
-    answers "was this written by the same SQLite?", not the question
-    RULES.md §10.3 actually asks, which is "did somebody hand-edit it?".
+    A SQLite file's exact bytes are not a function of its contents alone, and
+    normalise_sqlite_header only covers the most visible part of that. Measured
+    on this fixture, building `sample_areas.gpkg` from one identical SQL script:
+
+      * bytes 92-99 are the version stamp — 3.51.2 vs 3.53.4 differ there and
+        NOWHERE else, which is what normalise_sqlite_header erases;
+      * SQLite 3.40.1 vs 3.53.4, same compile flags, differ in 3 further bytes,
+        at file offset 7368 — inside the FREE SPACE of the schema page, where
+        3.40.1 leaves `02 80 00 4b` behind and 3.53.4 leaves zeros. The rows,
+        the schema text and every root page are identical;
+      * a library built WITHOUT SQLITE_SECURE_DELETE differs in ~1000 bytes at
+        the same version, for the same reason on a larger scale. Arch ships it
+        on, plenty of distributions do not.
+
+    None of it is fixable at the source: VACUUM and VACUUM INTO both reproduce
+    the residue byte for byte, so there is no canonical form to write.
+
+    So a byte comparison of a committed .db against a fresh build answers "was
+    this written by the same SQLite build?", not the question RULES.md §10.3
+    actually asks, which is "did somebody hand-edit it?".
 
     Person B and Person C run this suite on their own machines. Comparing bytes
     made this test fail for them on any different SQLite build, with a message
@@ -363,7 +379,73 @@ def _logical_content(path: pathlib.Path) -> bytes:
     rows are what B and C consume, so those are what is compared.
     """
     with contextlib.closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as conn:
-        return "\n".join(conn.iterdump()).encode("utf-8")
+        conn.row_factory = sqlite3.Row
+        lines = list(conn.iterdump())
+        redacted = _fingerprints_of_sqlite_written_files(conn, path.parent)
+
+    if redacted:
+        lines = [redacted.get(_fingerprint_id(line), line) for line in lines]
+    return "\n".join(lines).encode("utf-8")
+
+
+def _fingerprint_id(dump_line: str) -> str | None:
+    """The fingerprints.id an iterdump INSERT line carries, if it is one."""
+    if not dump_line.startswith('INSERT INTO "fingerprints" VALUES('):
+        return None
+    return dump_line.split("'", 2)[1]
+
+
+def _fingerprints_of_sqlite_written_files(
+    conn: sqlite3.Connection, fixtures_dir: pathlib.Path
+) -> dict[str, str]:
+    """Replacement dump lines for fingerprints whose bytes SQLite chose.
+
+    Neutralising the .gpkg's own bytes (above) was not enough on its own.
+    build_fixtures.py records the SHA-256 of `data/sample_areas.gpkg` as a ROW
+    inside mock_provenance.db, so a residue byte in that GeoPackage re-emerges
+    as a CONTENT difference in this database's dump — where the comparison can
+    no longer absorb it, and where the failure is reported against
+    mock_provenance.db, pointing the reader at the wrong file entirely.
+
+    Only fingerprints of a real SQLite-written file that ships in the fixture
+    set qualify. The synthetic `/work/ndvi/*.gpkg` rows are invented paths with
+    constant hashes — nothing on disk backs them, nothing can drift, and
+    redacting them would blind this test to a real content change.
+
+    The rest of each row still gets compared; only hash_value and
+    file_size_bytes are withheld. test_real_input_files_exist_and_their_
+    recorded_hash_is_correct still checks those two byte-exactly against the
+    file beside them, which is the invariant Person B depends on.
+    """
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    )}
+    if not {"fingerprints", "entities"} <= tables:
+        return {}
+
+    rows = conn.execute(
+        "SELECT f.id, f.entity_id, e.file_path, f.hash_algorithm, f.hash_strategy,"
+        "       f.feature_count, f.computed_at "
+        "FROM fingerprints f JOIN entities e ON e.id = f.entity_id "
+        "WHERE e.file_path IS NOT NULL"
+    ).fetchall()
+
+    replacements = {}
+    for row in rows:
+        relative = pathlib.Path(row["file_path"])
+        if relative.suffix not in _SQLITE_SUFFIXES:
+            continue
+        if not (fixtures_dir / relative).is_file():
+            continue
+        replacements[row["id"]] = (
+            f"-- fingerprints row {row['id']} for {row['file_path']}: "
+            f"entity={row['entity_id']} algorithm={row['hash_algorithm']} "
+            f"strategy={row['hash_strategy']} features={row['feature_count']} "
+            f"computed_at={row['computed_at']} "
+            f"[hash_value and file_size_bytes withheld — they depend on the "
+            f"local SQLite build, see _logical_content]"
+        )
+    return replacements
 
 
 def _fixture_content(path: pathlib.Path) -> bytes:
@@ -432,6 +514,18 @@ def _stale_report(stale: list[str]) -> str:
         "files usually mean your SQLite wrote them differently from the machine",
         "that committed them — see tests/fixtures/_minifiles.py",
         "normalise_sqlite_header, and docs/CONTRACT_schema.md.",
+    ]
+    if stale == ["mock_provenance.db"]:
+        lines += [
+            "",
+            "Only the database differs, which is the shape that means a data",
+            "file's recorded SHA-256 moved. `data/sample_areas.gpkg` is written",
+            "by SQLite, so its bytes — and the hash of them stored in this",
+            "database — depend on your SQLite build. _logical_content withholds",
+            "that one row; if you are seeing this anyway, the difference is",
+            "somewhere else and worth reading closely.",
+        ]
+    lines += [
         "",
         "Report the version above BEFORE regenerating. Only once it is a real",
         "content change does `make fixtures` + RULES.md §3.4 step 5 apply.",
@@ -442,23 +536,30 @@ def _stale_report(stale: list[str]) -> str:
 # ===========================================================================
 # the reproducibility invariant itself
 #
-# normalise_sqlite_header is what makes the committed fixtures reproducible on
-# a machine whose SQLite is not the author's. Nothing asserted it, which is how
-# the original defect survived long enough to reach a teammate.
+# normalise_sqlite_header and _logical_content are together what make the
+# committed fixtures usable on a machine whose SQLite is not the author's:
+# the first erases the version stamp, the second stops caring about the bytes
+# no one can erase. Nothing asserted either, which is how the original defect
+# survived long enough to reach a teammate.
 # ===========================================================================
 
 def test_a_geopackage_is_identical_whatever_sqlite_wrote_it(tmp_path):
-    """Two SQLite builds writing the same GeoPackage must produce one file.
+    """The version stamp must not survive into a committed GeoPackage.
 
     Simulated by stamping a foreign SQLITE_VERSION_NUMBER into a copy — which
-    is the only thing that actually differed when this was found in the wild:
-    SQLite 3.51.2 wrote the committed fixture, 3.53.4 rebuilt it, and the two
-    differed in exactly two bytes, both inside that field.
+    is the whole difference between the SQLite builds this was found with:
+    3.51.2 wrote the original committed fixture, 3.53.4 rebuilt it, and the two
+    differ at offsets 95 and 97-99 and nowhere else.
 
-    It matters far more than two bytes sounds, because build_fixtures.py
+    It matters far more than four bytes sounds, because build_fixtures.py
     records the SHA-256 of this file inside mock_provenance.db. A change here
-    propagates into 64 bytes of the shared database, and the fixture set stops
-    being reproducible at all.
+    propagates into 64 bytes of the shared database.
+
+    Note what this test does NOT claim: that blanking the stamp makes the file
+    reproducible everywhere. It does not — SQLite 3.40.1 also differs in three
+    bytes of schema-page free space, and a build without SQLITE_SECURE_DELETE
+    in about a thousand. See _logical_content, which is what actually carries
+    reproducibility across machines.
     """
     from _minifiles import normalise_sqlite_header, write_point_geopackage
 
@@ -479,6 +580,52 @@ def test_a_geopackage_is_identical_whatever_sqlite_wrote_it(tmp_path):
         "normalise_sqlite_header no longer erases the SQLite version stamp, so "
         "the committed fixtures are reproducible only on the machine that built "
         "them (RULES.md §10.3)"
+    )
+
+
+def test_a_drifting_geopackage_hash_does_not_fail_the_database(tmp_path):
+    """The .gpkg's SHA-256 is a row inside mock_provenance.db, so byte drift in
+    the GeoPackage used to surface as a content difference in the DATABASE —
+    the one place _logical_content could not absorb it, reported against the
+    wrong file. Simulated here by moving the recorded hash, which is exactly
+    what a rebuild on SQLite 3.40.1 does.
+
+    The second half is the part that keeps this honest: every other fingerprint
+    must still be compared byte-exactly, or the redaction has blinded the test
+    to real content changes.
+    """
+    committed = FIXTURES / "mock_provenance.db"
+    drifted = tmp_path / "mock_provenance.db"
+    drifted.write_bytes(committed.read_bytes())
+    # The data files must sit beside it, as they do in a real build: which
+    # fingerprints are withheld is decided by what is actually on disk.
+    shutil.copytree(DATA, tmp_path / "data")
+
+    def move_hash(where: str, *params) -> None:
+        with contextlib.closing(sqlite3.connect(drifted)) as conn:
+            changed = conn.execute(
+                "UPDATE fingerprints SET hash_value = 'f' || substr(hash_value, 2),"
+                "                        file_size_bytes = file_size_bytes + 1 "
+                f"WHERE entity_id = (SELECT id FROM entities WHERE {where})",
+                params,
+            ).rowcount
+            conn.commit()
+        assert changed == 1, f"expected one fingerprint to move, moved {changed}"
+
+    # The real, on-disk, SQLite-written file: withheld.
+    move_hash("file_path = ?", "data/sample_areas.gpkg")
+    assert _fixture_content(drifted) == _fixture_content(committed), (
+        "a drifting hash for a SQLite-written data file still fails the "
+        "database comparison — the coupling _fingerprints_of_sqlite_written_"
+        "files exists to break is back"
+    )
+
+    # An invented path with a constant hash: nothing can drift, so nothing is
+    # withheld, and a change here is a genuine content change.
+    move_hash("file_path = ?", "/work/ndvi/classes.gpkg")
+    assert _fixture_content(drifted) != _fixture_content(committed), (
+        "fingerprints of files that are NOT on disk are being withheld too, "
+        "which hides real content changes from RULES.md §10.3"
     )
 
 

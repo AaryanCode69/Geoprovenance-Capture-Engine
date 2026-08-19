@@ -86,9 +86,25 @@ sample_points.shp ──Buffer (re-run)──> points_buffered.shp (v2)
 make fixtures
 ```
 
-Deterministic: rebuilding without changing `build_fixtures.py` produces **byte-identical** output, and the script tells you whether anything changed. If it says the fixtures changed, `RULES.md` §3.4 step 5 applies — **tell B and C what changed and what they must update.**
+Deterministic on one machine: rebuilding without changing `build_fixtures.py` produces **byte-identical** output, and the script tells you whether anything changed. If it says the fixtures changed, `RULES.md` §3.4 step 5 applies — **tell B and C what changed and what they must update.**
 
 `tests/storage/test_fixtures.py` checks all of this, including that the committed files match a fresh build (i.e. nobody hand-edited them).
+
+### Across machines: the two SQLite files are not byte-reproducible, and that is fine
+
+`mock_provenance.db` and `data/sample_areas.gpkg` are written by the SQLite library, and **their exact bytes depend on which SQLite wrote them** — not just on the data. Measured on this fixture, building `sample_areas.gpkg` from one identical SQL script:
+
+| Difference | Bytes | Where |
+|---|---|---|
+| SQLite 3.51.2 vs 3.53.4 | 4 | the version stamp, bytes 92–99 |
+| SQLite 3.40.1 vs 3.53.4, same compile flags | 3 more | file offset 7368 — **free space** on the schema page, where 3.40.1 leaves `02 80 00 4b` and 3.53.4 leaves zeros |
+| A library built **without** `SQLITE_SECURE_DELETE` | ~1000 | the same kind of residue, same version, on a larger scale |
+
+In every case the rows, the schema text and every root page are identical — only unused bytes differ. `normalise_sqlite_header` erases the first row of that table; nothing erases the rest. `VACUUM` and `VACUUM INTO` both reproduce the residue byte for byte, so there is no canonical form to write instead.
+
+So **do not compare these two files byte for byte across machines**, and do not regenerate the committed set just because your bytes differ. The test suite compares them by their contents (`_logical_content`), which is what B and C actually consume.
+
+One consequence is worth knowing about, because it is not obvious: the SHA-256 of `sample_areas.gpkg` is recorded as a **row inside** `mock_provenance.db`, so a residue byte in the GeoPackage would otherwise reappear as a content difference in the database. That single fingerprint's `hash_value` and `file_size_bytes` are therefore withheld from the committed-vs-fresh comparison; everything else about the row is still checked, and `test_real_input_files_exist_and_their_recorded_hash_is_correct` still verifies the hash byte-exactly against the file sitting beside it.
 
 ## Known limitation
 
