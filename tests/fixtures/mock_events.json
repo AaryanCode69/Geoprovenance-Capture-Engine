@@ -58,7 +58,7 @@
   {
     "event_id": "423c88e4-f3d5-57d9-b7fb-3632b1839cc1",
     "session_id": "23114154-8b40-5a4b-a7b1-75809420aef6",
-    "source": "post_hook",
+    "source": "run_wrapper",
     "algorithm_id": "native:clip",
     "algorithm_name": "Clip",
     "provider": "qgis",

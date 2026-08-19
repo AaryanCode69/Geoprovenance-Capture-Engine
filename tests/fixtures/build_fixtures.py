@@ -226,11 +226,27 @@ def build_workflow_1(store: ProvenanceStore, agent: str) -> list[dict]:
             parameters={"DISTANCE": 500, "SEGMENTS": 5, "DISSOLVE": False,
                         "END_CAP_STYLE": 0, "JOIN_STYLE": 0, "MITER_LIMIT": 2},
             capture_channel="post_hook", dedup_key="w1-buffer")
+
+        # §5.9's evidence path, which nothing in the fixture set exercised
+        # before: this job was seen by BOTH the hook and the processing.run
+        # wrapper. The hook got there first and inserted; the wrapper arrived
+        # second and corroborated. Person C's panel and Person B's mapper
+        # should meet a corroborated row at least once, and RQ1's per-channel
+        # split (§8.3) is read straight off this column.
+        #
+        # Through increment_corroboration rather than a literal, so the fixture
+        # is built by the same call production makes.
+        store.increment_corroboration(buffer_run)
         clip_run = store.add_activity(
             activity_id=fid("w1/clip"), algorithm_id="native:clip",
             algorithm_name="Clip", provider="qgis", session_id=session,
             started_at=ts(20), ended_at=ts(22), parameters={},
-            capture_channel="post_hook", dedup_key="w1-clip")
+            # The one fixture job caught by the processing.run monkeypatch.
+            # `run_wrapper` has been a legal `source` since A3 and appears in
+            # both docs/CONTRACT_event.md and schemas/event.schema.json, but no
+            # fixture used it, so Person B's `source` switch never saw the third
+            # case in the data it develops against.
+            capture_channel="run_wrapper", dedup_key="w1-clip")
 
         for kwargs in (
             dict(relation_type="used", source_id=buffer_run, target_id=roads,
@@ -280,6 +296,7 @@ def build_workflow_1(store: ProvenanceStore, agent: str) -> list[dict]:
                                feature_count=1204)],
                agent=QGIS_334),
         _event("w1/clip", session, "native:clip", "Clip", ts(20), ts(22),
+               source="run_wrapper",
                parameters={},
                inputs=[_layer("INPUT", "/output/buffered_roads.shp", **shp,
                               feature_count=1204),

@@ -243,10 +243,33 @@ def test_events_are_json_serialisable_without_help(events):
     assert json.dumps(events)
 
 
-def test_events_include_both_capture_channels(events):
-    """§5.9 / §8.3 — B and C should see both channels in test data, because
-    production will have both."""
-    assert {e["source"] for e in events} == {"post_hook", "history_signal"}
+def test_events_include_every_capture_channel(events):
+    """§5.9 / §8.3 — B and C should see every channel in test data, because
+    production has every channel.
+
+    This asserted only two of the three until 19 Aug 2026. `run_wrapper` has
+    been a legal `source` since A3 and is in both docs/CONTRACT_event.md and
+    schemas/event.schema.json, but no fixture event carried it — so Person B's
+    `source` handling never met its third case in the data B develops against.
+    """
+    assert {e["source"] for e in events} == {
+        "post_hook", "run_wrapper", "history_signal"
+    }
+
+
+def test_a_corroborated_job_is_in_the_fixture_set(fixture_store):
+    """§5.9 — a job both channels saw is stored ONCE with the counter moved.
+
+    Nothing in the fixture set exercised that until 19 Aug 2026: every activity
+    had corroborations = 0, so neither Person C's panel nor the RQ1 per-channel
+    split (§8.3) had a single example to develop against.
+    """
+    corroborated = [
+        a for a in fixture_store._connection().execute(
+            "SELECT * FROM activities WHERE corroborations > 0"
+        )
+    ]
+    assert corroborated, "no corroborated job in the fixtures"
 
 
 def test_a_failed_event_is_present(events):
