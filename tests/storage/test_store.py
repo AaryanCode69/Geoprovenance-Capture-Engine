@@ -575,3 +575,48 @@ def test_store_works_as_a_context_manager(db_path):
         store.add_entity(file_path="/data/roads.shp")
     with pytest.raises(StoreError, match="closed"):
         store.get_entity("anything")
+
+
+# ===========================================================================
+# §4.7 / §5.4 — close() reaches every thread's connection
+# ===========================================================================
+
+def test_close_closes_connections_opened_on_other_threads(tmp_path):
+    """§5.4 — unload must leave no residue.
+
+    close() used to close only the CALLING thread's connection while setting
+    the closed flag for everyone, so every worker-thread connection leaked.
+    §4.7 chose per-thread connections precisely because QGIS may run algorithms
+    off the main thread, which makes those the connections that matter: on
+    Windows a leaked one holds a file lock, and everywhere it strands the
+    -wal/-shm files.
+    """
+    import threading
+
+    store = ProvenanceStore(tmp_path / "threads.db")
+    worker_conn = {}
+    ready = threading.Event()
+
+    def worker():
+        # Touch the store from another thread so it opens a second connection.
+        store.add_activity(algorithm_id="native:buffer", started_at=utc_now_iso())
+        worker_conn["conn"] = store._connection()
+        ready.set()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+    assert ready.is_set()
+    assert len(store._connections) == 2, "expected a connection per thread"
+
+    store.close()
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        worker_conn["conn"].execute("SELECT 1")
+
+
+def test_close_is_still_safe_to_call_twice(tmp_path):
+    """Teardown must always drain — a second unload cannot be an error."""
+    store = ProvenanceStore(tmp_path / "twice.db")
+    store.close()
+    store.close()

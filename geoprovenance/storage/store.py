@@ -39,6 +39,21 @@ outside this process (another QGIS instance on the same file).
 Consequence: an in-memory database cannot be used, because each thread would
 silently get its OWN empty database. The constructor rejects ``:memory:``
 rather than let that become a two-hour debugging session.
+
+A note on ``check_same_thread=False``, which this docstring used to reject
+outright. Connections are still one-per-thread and are never SHARED between
+threads — that part of the decision is unchanged, and it is what makes the
+design correct. The flag is set for exactly one reason: ``close()`` has to be
+able to close the connections other threads opened.
+
+Before, it closed only the calling thread's and then set ``_closed`` for
+everyone, so every worker-thread connection was leaked — and §4.7 chose
+per-thread connections precisely BECAUSE QGIS may run algorithms off the main
+thread, which means those are the connections the design exists to create.
+§5.4 says unload closes the database; it was closing one of them. On Windows
+that holds a file lock, and everywhere it leaves ``-wal`` / ``-shm`` files
+behind. ``close()`` takes the write lock first, so no writer can be inside a
+transaction while it runs.
 """
 
 from __future__ import annotations
@@ -172,6 +187,9 @@ class ProvenanceStore:
         self._local = threading.local()
         self._write_lock = threading.RLock()
         self._closed = False
+        #: Every connection handed out, so close() can reach all of them and
+        #: not just the caller's. Guarded by _write_lock.
+        self._connections: list[sqlite3.Connection] = []
 
         # Apply schema / migrations once, on the creating thread.
         self._initialise(self._connection())
@@ -191,6 +209,11 @@ class ProvenanceStore:
                 # transaction handling, so transaction() below controls BEGIN /
                 # COMMIT / ROLLBACK explicitly. §4.3 needs exact boundaries.
                 isolation_level=None,
+                # NOT so connections can be shared — they never are, one per
+                # thread is the §4.7 decision and it stands. This is only so
+                # close() can close a connection the calling thread did not
+                # open; see the module docstring.
+                check_same_thread=False,
             )
             conn.row_factory = sqlite3.Row
             # §4.2 [HARD]. foreign_keys is per-connection and must be set every
@@ -200,6 +223,8 @@ class ProvenanceStore:
             conn.execute(f"PRAGMA busy_timeout = {int(self._busy_timeout * 1000)}")
             self._local.conn = conn
             self._local.depth = 0
+            with self._write_lock:
+                self._connections.append(conn)
         return conn
 
     def _initialise(self, conn: sqlite3.Connection) -> None:
@@ -224,12 +249,28 @@ class ProvenanceStore:
         migrations.apply_migrations(conn)
 
     def close(self) -> None:
-        """Close this thread's connection. Safe to call more than once."""
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
-        self._closed = True
+        """Close EVERY connection this store opened. Safe to call more than once.
+
+        §5.4 — plugin unload must leave no residue. That includes the
+        connections opened on whatever threads QGIS ran algorithms on, which is
+        why the write lock is taken first: it cannot run while a writer is
+        inside a transaction (§4.3).
+
+        A connection that refuses to close is logged over by the caller rather
+        than raising, because teardown must always drain (see CleanupStack).
+        """
+        with self._write_lock:
+            self._closed = True
+            for conn in self._connections:
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    # Already closed, or unfinalized statements on a thread
+                    # that has since died. Losing one close beats stranding
+                    # the rest of unload.
+                    pass
+            self._connections.clear()
+        self._local.conn = None
 
     def __enter__(self) -> "ProvenanceStore":
         return self
