@@ -94,6 +94,29 @@ def and_list(names):
     return ", ".join(names[:-1]) + " and " + names[-1]
 
 
+def second_sighting_of(job):
+    """The same job as the OTHER place we watch would report it.
+
+    That place does not get told which settings name files, so everything stays
+    a plain setting and nothing is listed as a file read or made. It also only
+    notices a job after it has finished, so its time is the job's end, not its
+    start. Both differences are real, and both are what the matching has to
+    cope with — see RULES.md §5.9 and docs/capture_coverage.md §4.
+    """
+    settings = dict(job.get("parameters") or {})
+    for entry in (job.get("inputs") or []) + (job.get("outputs") or []):
+        settings[entry["param"]] = entry.get("path")
+
+    seen_again = dict(job)
+    seen_again["source"] = "history_signal"
+    seen_again["parameters"] = settings
+    seen_again["inputs"] = []
+    seen_again["outputs"] = []
+    seen_again["started_at"] = job.get("ended_at") or job["started_at"]
+    seen_again["ended_at"] = seen_again["started_at"]
+    return seen_again
+
+
 def _seconds(started_at, ended_at):
     """How long the whole piece of work took, start of the first job to end of
     the last."""
@@ -139,9 +162,14 @@ def main() -> int:
         # The second place we watch reports a job the first place already told
         # us about. It is the SAME run of the SAME tool, so it is counted as a
         # second sighting and not written down again (A5).
-        seen_again = dict(jobs[0])
-        seen_again["source"] = "history_signal"
-        result = engine.record_event(seen_again)
+        #
+        # Built the way the second place ACTUALLY reports it, not by copying
+        # what the first place said. The two watch from different vantage
+        # points: the first is told which settings are files and which are
+        # plain values, the second is not, and the second only notices a job
+        # once it has finished. Copying the first one's note hid that, and hid
+        # a real defect behind a passing demo (RULES.md §7.9).
+        result = engine.record_event(second_sighting_of(jobs[0]))
         assert result.corroborated and not result.recorded, "should be a second sighting"
         assert store.counts()["activities"] == 4, "still four jobs, not five"
 

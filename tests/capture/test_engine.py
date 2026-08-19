@@ -521,3 +521,138 @@ def test_earlier_work_is_left_alone_by_a_new_workflow(engine, store):
     assert [a["id"] for a in after["activities"]] == [
         a["id"] for a in before["activities"]
     ]
+
+
+# ===========================================================================
+# §5.9 — the regression suite for cross-channel dedup
+#
+# Every test below fails against the pre-fix engine. The three §5.9 tests that
+# already existed did not, because each was built on the one case where the
+# defect is invisible: they drove the hook side WITHOUT parameter_definitions,
+# so both channels split the parameters identically, and they chose timestamps
+# inside a single 100 ms bucket.
+# ===========================================================================
+
+#: What the history channel actually reports: no QgsProcessingAlgorithm in
+#: hand, so no parameter type map and nothing lifted into inputs/outputs.
+def run_buffer_as_history(engine, *, started_at, parameters=None):
+    return engine.record_algorithm_execution(
+        algorithm_id="native:buffer",
+        parameters=parameters if parameters is not None else dict(BUFFER_PARAMS),
+        parameter_definitions=None,          # the whole point
+        started_at=started_at,
+        ended_at=started_at,
+        source="history_signal",
+    )
+
+
+def test_the_hook_and_the_history_channel_agree_on_one_execution(engine, store):
+    """§5.9 [HARD] — THE regression test.
+
+    The hook holds the algorithm and passes parameter_definitions, so INPUT and
+    OUTPUT are lifted out of `parameters`. The history channel passes none, so
+    they stay in. The key used to be computed over the post-split dict, so the
+    two channels produced different digests for one execution — for every
+    algorithm with a layer parameter, i.e. all of them. Every job was written
+    twice and `corroborations` never moved off zero, which silently invalidates
+    the per-channel split RQ1 reports (§8.3).
+    """
+    first = run_buffer(engine, source="post_hook",
+                       started_at="2026-08-08T10:14:22.481903+00:00")
+    second = run_buffer_as_history(engine,
+                                   started_at="2026-08-08T10:14:22.900000+00:00")
+
+    assert first.recorded and not first.corroborated
+    assert second.corroborated and not second.recorded, (
+        "the history channel must corroborate the hook's record, not insert a "
+        "second row for the same execution"
+    )
+    assert store.counts()["activities"] == 1
+    assert store.get_activity(first.activity_id)["corroborations"] == 1
+    assert store.get_activity(first.activity_id)["capture_channel"] == "post_hook"
+
+
+def test_a_slow_algorithm_still_dedups_across_channels(engine, store):
+    """The hook stamps BEFORE the run; the history registry writes its entry
+    AFTER it. For anything slower than the old 100 ms bucket — which is every
+    real reproject — the two observations could never land in one bucket. The
+    match is against the activity's own interval, so it does not matter how
+    long the job took."""
+    run_buffer(engine, source="post_hook",
+               started_at="2026-08-08T10:14:22.000000+00:00")
+    # ended_at from run_buffer is 10:14:23.004117; the history entry lands
+    # after that, as it does in QGIS.
+    late = run_buffer_as_history(engine,
+                                 started_at="2026-08-08T10:14:23.500000+00:00")
+
+    assert late.corroborated, "a slow job must still be recognised as one run"
+    assert store.counts()["activities"] == 1
+
+
+def test_two_observations_either_side_of_a_bucket_boundary_are_one_run(engine, store):
+    """The old key floored timestamps onto a fixed 100 ms grid, so observations
+    2 ms apart got different keys whenever a grid line fell between them — and
+    the hook and the run wrapper stamp within milliseconds of each other."""
+    run_buffer(engine, source="post_hook",
+               started_at="2026-08-08T10:14:22.099000+00:00")
+    straddling = run_buffer(engine, source="run_wrapper",
+                            started_at="2026-08-08T10:14:22.101000+00:00")
+
+    assert straddling.corroborated
+    assert store.counts()["activities"] == 1
+
+
+def test_a_rerun_over_the_same_data_is_still_a_separate_job(engine, store):
+    """The other half of §5.9, and the one the fix must not break: the same
+    algorithm over the same files an hour later is a NEW execution. Collapsing
+    it would understate RQ1 completeness instead of overstating it."""
+    run_buffer(engine, source="post_hook",
+               started_at="2026-08-08T10:14:22.000000+00:00")
+    run_buffer(engine, source="post_hook",
+               started_at="2026-08-08T11:14:22.000000+00:00")
+    assert store.counts()["activities"] == 2
+
+
+def test_different_inputs_are_different_jobs_even_at_the_same_moment(engine, store):
+    """Dedup keys on the input paths, so two jobs that differ only in which
+    file they read must not collapse into one."""
+    at = "2026-08-08T10:14:22.000000+00:00"
+    run_buffer(engine, started_at=at)
+    other = dict(BUFFER_PARAMS, INPUT="/data/rivers.shp")
+    run_buffer(engine, started_at=at, parameters=other)
+    assert store.counts()["activities"] == 2
+
+
+def test_the_channel_split_survives_a_realistic_pair(engine, store):
+    """§8.3's reportable number, built the way production builds it rather than
+    from two identically-shaped calls."""
+    run_buffer(engine, source="post_hook",
+               started_at="2026-08-08T10:14:22.481903+00:00")
+    run_buffer_as_history(engine, started_at="2026-08-08T10:14:22.900000+00:00")
+    run_buffer_as_history(engine, started_at="2026-08-08T12:00:00.000000+00:00",
+                          parameters=dict(BUFFER_PARAMS, INPUT="/data/rails.shp"))
+
+    stats = store.channel_statistics()
+    assert stats["post_hook"] == {"first": 1, "corroborations": 1}
+    assert stats["history_signal"] == {"first": 1, "corroborations": 0}
+
+
+def test_the_agent_row_does_not_survive_a_failed_execution(engine, store):
+    """§4.3 / §4.6 — the agent write used to commit in its own transaction just
+    before the execution's, so a failure in between left an orphan agents row.
+    Everything now lands together or not at all."""
+    bad = dict(BUFFER_PARAMS)
+    with pytest.raises(Exception):
+        engine.record_event({
+            "algorithm_id": "native:buffer",
+            "session_id": engine.session_id,
+            "started_at": "2026-08-08T10:14:22.000000+00:00",
+            "ended_at": None,
+            "source": "post_hook",
+            "status": "not-a-valid-status",   # rejected by add_activity
+            "parameters": bad,
+            "inputs": [], "outputs": [],
+            "agent": {"qgis_version": "9.9.9", "os_info": "x", "python_version": "3"},
+        })
+    assert store.counts()["agents"] == 0, "no orphan agent row from a failed write"
+    assert store.counts()["activities"] == 0

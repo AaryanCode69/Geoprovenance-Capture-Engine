@@ -30,8 +30,10 @@ Phase 2 seam
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
+import sqlite3
 import threading
 import uuid
 from typing import Any
@@ -43,6 +45,29 @@ from . import environment, normalizer
 
 #: Layer-entry fields worth keeping on the entity row (docs/CONTRACT_event.md).
 _ENTITY_METADATA_FIELDS = ("feature_count", "band_count", "pixel_size", "width", "height")
+
+#: §5.9 — how far outside an activity's own [started_at, ended_at] interval a
+#: second channel's observation may fall and still be the SAME execution.
+#:
+#: A margin around the interval, not a fixed window around the start time. The
+#: post-execution hook stamps BEFORE the run and the history registry writes
+#: its entry AFTER it, so the two observations of one job are separated by the
+#: algorithm's entire runtime — which for a real raster reproject is seconds or
+#: minutes, not milliseconds. Matching against the interval makes the tolerance
+#: independent of how long the job took, so it does not have to be widened
+#: (and made wrong) to cover slow algorithms.
+DEDUP_MARGIN_S = 2.0
+
+
+def _parse_timestamp(value: Any) -> "dt.datetime | None":
+    """A timezone-aware datetime for an ISO 8601 string, or None. Never raises."""
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=dt.timezone.utc)
 
 
 def _stat_probe(path: str | None) -> dict[str, int] | None:
@@ -174,37 +199,108 @@ class ProvenanceCaptureEngine:
                 execution_log=execution_log,
                 agent=agent or environment.probe(),
             )
-            return self.record_event(event)
+            # The RAW parameter dict, before build_event split it. This is
+            # the one form all three channels genuinely share, and §5.9 is
+            # broken without it — see normalizer.dedup_parameters.
+            return self.record_event(event, raw_parameters=parameters)
         except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
             log_exception(f"capture failed for {algorithm_id}", exc)
             return CaptureResult(reason=f"{type(exc).__name__}: {exc}")
 
     # -- persistence -------------------------------------------------------
 
-    def record_event(self, event: dict) -> CaptureResult:
+    def record_event(self, event: dict, *, raw_parameters: Any = None) -> CaptureResult:
         """Write one event to the database.
 
         Raises on failure — the swallowing happens one level up in
         record_algorithm_execution (§5.1), so tests and the demo can see real
         errors instead of a silent no-op.
+
+        ``raw_parameters`` is the parameter dict as QGIS handed it over, before
+        build_event split layer-valued entries out of it. It is what §5.9's key
+        is computed from, because it is the only form every channel holds
+        alike; omit it and it is reconstructed from the event (see
+        normalizer.dedup_parameters). Keyword-only and optional, so this stays
+        source-compatible for Person B and Person C (§1.5).
         """
-        key = normalizer.dedup_key(
-            event["algorithm_id"], event.get("parameters"), event["started_at"]
-        )
+        # The channel-independent parameter view, NOT event["parameters"] —
+        # see normalizer.dedup_parameters for why that distinction is the
+        # whole of §5.9 working or silently not working.
+        parameters = normalizer.dedup_parameters(event, raw_parameters)
+        group = normalizer.dedup_group(event["algorithm_id"], parameters)
+        key = normalizer.dedup_key(event["algorithm_id"], parameters, event["started_at"])
 
         # §5.9 — first channel wins. The second corroborates and does not insert.
-        existing = self.store.find_activity_by_dedup_key(key)
+        existing = self._find_duplicate(group, event["started_at"])
         if existing is not None:
-            count = self.store.increment_corroboration(existing["id"])
-            log(f"corroborated {event['algorithm_id']} via {event['source']} "
-                f"(now {count})", INFO)
-            return CaptureResult(activity_id=existing["id"], corroborated=True)
+            return self._corroborate(existing, event)
 
-        agent_id = self._agent_row(event["agent"])
+        try:
+            return self._insert_event(event, key)
+        except sqlite3.IntegrityError:
+            # Another channel, on another thread, inserted between the lookup
+            # above and this insert. The UNIQUE index on dedup_key is what
+            # caught it. Losing the corroboration here would quietly understate
+            # the per-channel split that §8.3 reports, so recover it rather
+            # than letting §5.1 swallow the whole observation.
+            raced = self.store.find_activity_by_dedup_key(key)
+            if raced is None:
+                raise
+            return self._corroborate(raced, event)
 
+    def _corroborate(self, existing: dict, event: dict) -> CaptureResult:
+        """Record that a second channel also saw an execution already on file."""
+        count = self.store.increment_corroboration(existing["id"])
+        log(f"corroborated {event['algorithm_id']} via {event['source']} "
+            f"(now {count})", INFO)
+        return CaptureResult(activity_id=existing["id"], corroborated=True)
+
+    def _find_duplicate(self, dedup_group: str, started_at: str) -> dict | None:
+        """An activity already on file that IS this execution, or None (§5.9).
+
+        A candidate shares the algorithm and the parameter digest; what decides
+        it is time. The observation counts as the same run when it falls inside
+        the recorded activity's own [started_at, ended_at] interval, widened by
+        DEDUP_MARGIN_S at both ends.
+
+        This replaces matching on a shared 100 ms bucket, which could not work:
+        two observations 2 ms apart landed in different buckets whenever a grid
+        line fell between them, and the hook/history pair is separated by the
+        whole runtime of the algorithm regardless.
+
+        A genuine re-run of the same algorithm over the same data — later in
+        the session, outside the interval — is correctly NOT a duplicate.
+        Collapsing those would understate RQ1 completeness, which is the
+        failure mode test_a_genuinely_separate_run_is_not_swallowed_as_a_duplicate
+        exists to catch.
+        """
+        observed = _parse_timestamp(started_at)
+        if observed is None:
+            # No usable timestamp, so no basis for the judgement. Recording a
+            # possible duplicate beats discarding a real execution (§4.10).
+            return None
+
+        margin = dt.timedelta(seconds=DEDUP_MARGIN_S)
+        for candidate in self.store.find_activities_by_dedup_group(dedup_group):
+            start = _parse_timestamp(candidate.get("started_at"))
+            if start is None:
+                continue
+            end = _parse_timestamp(candidate.get("ended_at")) or start
+            if end < start:
+                end = start
+            if start - margin <= observed <= end + margin:
+                return candidate
+        return None
+
+    def _insert_event(self, event: dict, key: str) -> CaptureResult:
+        """Write one new execution. §4.3 [HARD] — all of it, or none of it."""
         # §4.3 [HARD] — the activity, its datasets and all its relations land
-        # together or not at all.
+        # together or not at all. The agent row is inside the boundary too:
+        # it used to commit in its own transaction just before this one, so a
+        # failure in between left an orphan agents row — the self-inflicted
+        # row inflation §4.6 and §8.6 warn about.
         with self.store.transaction():
+            agent_id, cache_key = self._agent_row(event["agent"])
             activity_id = self.store.add_activity(
                 algorithm_id=event["algorithm_id"],
                 algorithm_name=event.get("algorithm_name"),
@@ -221,6 +317,13 @@ class ProvenanceCaptureEngine:
 
             for layer in event.get("inputs") or []:
                 entity_id = self._entity_for_input(layer)
+                # Appendix B.2 gives exactly four roles, and `overlay` names
+                # the one QGIS parameter key it was coined for. Other
+                # second-input keys (INTERSECT, MASK_LAYER, ...) are recorded
+                # as `input` DELIBERATELY: their real key is preserved verbatim
+                # in qgis_param_key, and widening the role vocabulary to cover
+                # them would be a §3.4 breaking change to B's and C's code for
+                # information they can already read off that column.
                 self.store.add_relation(
                     relation_type="used", source_id=activity_id, target_id=entity_id,
                     role="overlay" if layer["param"] == "OVERLAY" else "input",
@@ -240,6 +343,12 @@ class ProvenanceCaptureEngine:
                 source_id=activity_id, target_id=agent_id,
             )
 
+        # Only now that the transaction has COMMITTED. Caching inside it would
+        # remember an agent id that a rollback then threw away, and every later
+        # execution in the session would point wasAssociatedWith at a row that
+        # does not exist.
+        self._agent_cache[cache_key] = agent_id
+
         log(f"recorded {event['algorithm_id']} "
             f"({len(event.get('inputs') or [])} in, "
             f"{len(event.get('outputs') or [])} out) via {event['source']}", INFO)
@@ -257,17 +366,22 @@ class ProvenanceCaptureEngine:
         self.group_session(event["session_id"])
         return CaptureResult(activity_id=activity_id, recorded=True)
 
-    def _agent_row(self, agent: dict) -> str:
-        """§4.6 — one row per distinct environment, reused across activities.
+    def _agent_row(self, agent: dict) -> tuple[str, str]:
+        """§4.6 — one row per distinct environment. Returns (id, cache key).
 
         Cached in-process as well, because the environment cannot change during
         a QGIS session and a SELECT per execution is measurable overhead in the
         RQ2 numbers we are about to publish.
+
+        The cache is NOT written here. This now runs inside the execution's
+        transaction (§4.3), and a rollback would leave the cache pointing at an
+        agent row that was never committed; _insert_event stores the entry once
+        the commit has actually happened.
         """
         cache_key = repr(sorted((agent or {}).items(), key=lambda kv: kv[0]))
         cached = self._agent_cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached, cache_key
 
         agent_id = self.store.get_or_create_agent(
             qgis_version=(agent or {}).get("qgis_version"),
@@ -275,8 +389,7 @@ class ProvenanceCaptureEngine:
             python_version=(agent or {}).get("python_version"),
             plugin_versions=(agent or {}).get("plugin_versions"),
         )
-        self._agent_cache[cache_key] = agent_id
-        return agent_id
+        return agent_id, cache_key
 
     def _entity_for_input(self, layer: dict) -> str:
         """The dataset a job read."""

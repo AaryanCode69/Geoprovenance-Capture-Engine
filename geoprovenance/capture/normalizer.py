@@ -453,13 +453,57 @@ def _bucket_timestamp(started_at: str) -> str:
     return moment.replace(microsecond=(moment.microsecond // step) * step).isoformat()
 
 
-def dedup_key(algorithm_id: str, parameters: Any, started_at: str) -> str:
-    """The key both capture channels compute for one execution (§5.9).
+def dedup_parameters(event: dict, raw_parameters: Any = None) -> dict[str, Any]:
+    """The parameter view every channel can agree on (§5.9).
 
-    First channel to arrive inserts; the second finds this key already present
-    and increments the corroboration counter instead. Keeping that counter is
-    what produces the publishable "the hook caught 98%, the history channel
-    caught the other 2%" result (§8.3).
+    THE POINT OF THIS FUNCTION. The key used to be computed over
+    ``event["parameters"]``, which is the POST-SPLIT scalar dict — and the
+    channels do not split alike. The hook and the wrapper hold a
+    ``QgsProcessingAlgorithm``, so they pass ``parameter_definitions`` and
+    layer-valued parameters are lifted out into ``inputs``/``outputs`` (§3.3).
+    The history channel has no algorithm in hand, passes no definitions, and so
+    keeps those same parameters as scalars. For ``native:buffer`` that gave
+
+        hook     {"DISTANCE": 500}
+        history  {"INPUT": "/data/roads.shp", "DISTANCE": 500,
+                  "OUTPUT": "/data/buf.shp"}
+
+    — different digests, for every algorithm with a layer parameter, which is
+    essentially all of them. First-channel-wins could never fire, every job was
+    written twice, and ``corroborations`` sat at 0. That is not merely a
+    capture bug: it silently invalidates the per-channel split RQ1 reports
+    (§8.3) and inflates the completeness denominator.
+
+    The fix is to key on what BOTH channels genuinely hold: the RAW parameter
+    dict, before any splitting. ``raw_parameters`` is that dict, threaded
+    through from ``record_algorithm_execution``.
+
+    Without it — an event replayed from ``tests/fixtures`` (RULES.md §7.3), or
+    anything else calling ``record_event`` directly — the raw dict is gone, so
+    it is reconstructed from the event: the scalars it kept, plus every input
+    and output entry mapped back to its path. That reconstruction equals the
+    raw dict whenever the parameters were plain paths, which is what a replayed
+    event contains.
+    """
+    if isinstance(raw_parameters, dict):
+        return dict(raw_parameters)
+
+    merged: dict[str, Any] = dict(event.get("parameters") or {})
+    for entry in (event.get("inputs") or []) + (event.get("outputs") or []):
+        try:
+            merged[str(entry["param"])] = entry.get("path")
+        except Exception:  # noqa: BLE001 — §5.5, a malformed entry is not fatal
+            continue
+    return merged
+
+
+def dedup_group(algorithm_id: str, parameters: Any) -> str:
+    """The time-independent half of the key: algorithm plus parameter digest.
+
+    Two observations of ONE execution share this; two genuinely separate runs
+    of the same algorithm over the same data also share it, and are told apart
+    by time (§5.9). Kept separate from dedup_key so the store can range-scan
+    for candidates on the prefix.
     """
     # default=_stable_repr, not default=repr: anything reaching the encoder's
     # fallback would otherwise carry a memory address into the digest and make
@@ -468,7 +512,26 @@ def dedup_key(algorithm_id: str, parameters: Any, started_at: str) -> str:
         flatten_parameters(parameters), sort_keys=True, default=_stable_repr
     )
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
-    return f"{algorithm_id}|{digest}|{_bucket_timestamp(started_at)}"
+    return f"{algorithm_id}|{digest}"
+
+
+def dedup_key(algorithm_id: str, parameters: Any, started_at: str) -> str:
+    """The value stored in ``activities.dedup_key`` (§5.9).
+
+    Shape is unchanged — ``algorithm|digest|bucket`` — so the UNIQUE index
+    ``idx_activities_dedup`` stays a valid last-resort backstop and no schema
+    change is needed (§3.4 would otherwise make this a breaking change to two
+    other people's work).
+
+    The bucket is NOT how duplicates are found any more. Flooring onto a fixed
+    100 ms grid meant two observations 2 ms apart got different keys whenever a
+    grid line fell between them, and the hook (which stamps BEFORE the run) and
+    the history channel (whose timestamp is written AFTER it) are separated by
+    the algorithm's entire runtime. Matching is done by
+    ProvenanceCaptureEngine._find_duplicate over an interval instead; the
+    bucket survives only to keep this value unique-ish per execution.
+    """
+    return f"{dedup_group(algorithm_id, parameters)}|{_bucket_timestamp(started_at)}"
 
 
 # ---------------------------------------------------------------------------

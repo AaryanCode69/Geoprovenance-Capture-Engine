@@ -503,6 +503,30 @@ class ProvenanceStore:
             .fetchone()
         )
 
+    def find_activities_by_dedup_group(self, dedup_group: str) -> list[dict[str, Any]]:
+        """Every activity whose dedup key starts with ``dedup_group`` (§5.9).
+
+        The candidates for "have we already recorded this execution?", oldest
+        first. The caller decides which of them — if any — is the SAME run
+        rather than a later re-run of the same algorithm over the same data;
+        that is a time judgement and it lives in the capture engine, not in
+        SQL (see ProvenanceCaptureEngine._find_duplicate).
+
+        Implemented as a range scan rather than ``LIKE``, so the UNIQUE index
+        on ``dedup_key`` is used: keys sort as ``group|bucket`` and ``}`` is
+        the character just past ``|`` in ASCII, so the half-open range
+        ``[group|, group}}`` is exactly this group and nothing else.
+        """
+        lower = f"{dedup_group}|"
+        upper = f"{dedup_group}}}"
+        return _rows_to_dicts(
+            self._connection().execute(
+                "SELECT * FROM activities WHERE dedup_key >= ? AND dedup_key < ? "
+                "ORDER BY started_at",
+                (lower, upper),
+            )
+        )
+
     def increment_corroboration(self, activity_id: str) -> int:
         """Record that the second channel also saw this execution (§5.9).
 
