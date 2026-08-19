@@ -173,7 +173,7 @@ def main() -> int:
         assert counts["relations"] == 3, counts     # read, made, ran-on
 
     with demo.step("Reading it back in plain English"):
-        job = _only_activity(store)
+        job = _only_activity(store, engine)
         read, made = _files(store, job["id"])
         assert read is not None and made is not None, "both files should be on record"
 
@@ -210,9 +210,16 @@ def main() -> int:
 
 # ---------------------------------------------------------------------------
 
-def _only_activity(store):
-    rows = store._connection().execute("SELECT * FROM activities").fetchall()
-    return dict(rows[0])
+def _only_activity(store, engine):
+    """The one job this demo recorded.
+
+    Through the public reader rather than by running SQL against the store's
+    private connection. RULES.md §1.3 says nobody reaches into the tables; a
+    demo that does it anyway is the example everyone copies.
+    """
+    jobs = store.list_activities_for_session(engine.session_id)
+    assert len(jobs) == 1, f"expected exactly one job, found {len(jobs)}"
+    return jobs[0]
 
 
 def _files(store, activity_id):

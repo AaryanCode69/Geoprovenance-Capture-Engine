@@ -37,14 +37,16 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-**Built and passing — 298 tests, `make test`, no QGIS required:**
+**Built and passing — 313 tests, `make test`, no QGIS required:**
 
 - `storage/schema.sql` — 8 tables, 9 indices, `user_version = 1`. Draft, not yet `contract-v1`.
 - `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code.
-- `storage/store.py` — **A2 complete.** `ProvenanceStore` with the full §4.5 method surface, `transaction()` with savepoint nesting, per-thread connections + write lock, WAL + foreign keys.
+- `storage/store.py` — **A2 complete.** `ProvenanceStore` with the full §4.5 method surface, `transaction()` with savepoint nesting, per-thread connections + write lock, WAL + foreign keys. `close()` closes **every** thread's connection, not just the caller's (fixed 19 Aug 2026 — it was leaking exactly the worker-thread connections §4.7 exists to create).
 - `tests/fixtures/` — **A0.3 complete.** `mock_provenance.db` (3 workflows, 16 jobs, 23 datasets, 70 relations), `mock_events.json`, `mock_ids.json`, real Shapefile + GeoPackage in `data/`, all regenerable and byte-deterministic via `make fixtures`. **B and C are unblocked** — see `tests/fixtures/README.md`.
+  Byte-determinism is now true *across machines*: SQLite stamps its own library version into every file it writes, so the GeoPackage — and the SHA-256 of it recorded in the database — differed on every different SQLite build, and `test_committed_fixtures_match_a_fresh_build` failed for anyone whose SQLite was not the author's. `build_fixtures.py` blanks that header field (19 Aug 2026). All three `capture_channel` values and one corroborated row are now represented; counts and ids are unchanged.
 - `plugin.py`, `ui/dock.py`, `lifecycle.py`, `paths.py`, `log.py`, `icon.png` — **A1**, written, not yet run in QGIS (see below).
-- `capture/normalizer.py` + `capture/engine.py` — **A3 core, complete and tested.** Both import zero QGIS (they duck-type), so the whole write path is verifiable here. 70 tests.
+- `capture/normalizer.py` + `capture/engine.py` — **A3 core, complete and tested.** Both import zero QGIS (they duck-type), so the whole write path is verifiable here.
+  **§5.9 dedup reworked 19 Aug 2026.** The key was hashed from the *post-split* `event["parameters"]`, which the channels do not produce alike, so cross-channel dedup could never fire: every job was written twice and `corroborations` was permanently 0. It is now keyed on the **raw pre-split** parameters and matched against an activity's `[started_at, ended_at]` interval (`DEDUP_MARGIN_S`) instead of a 100 ms bucket. No schema change. Full write-up in `docs/capture_coverage.md` §4.
 - `capture/hooks.py` — **A3/A5, QGIS-only, UNVERIFIED.** Pre- and post-execution hook installers + `processing.run` monkeypatch.
 - `capture/history_observer.py` — **A5 complete.** `entryAdded` observer plus the `QTimer` polling fallback; the QGIS-facing halves are UNVERIFIED, the parsing and dedup are not.
 - `capture/environment.py` — **A6 hardened.** Agent probe, degrades outside QGIS. Records **every installed** plugin (`available_plugins`) as of 19 Aug 2026 — see the note below.
@@ -73,7 +75,9 @@ Nothing that requires a QGIS process has ever been executed — QGIS is not inst
 | `qgis.utils.available_plugins` exists and is what A6 assumes | `capture/environment.py` | the `plugin_versions` block of the first captured job |
 | The A6 menu dialogs ("Start new workflow", "Name this workflow…") | `plugin.py` | click them; the record's grouping is the visible effect |
 
-The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven.
+The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven. A guard test now enforces that for `capture/normalizer.py`, `capture/engine.py`, `capture/history_observer.py`, `lifecycle.py` and `log.py` as well as `storage/` — it previously covered `storage/` only, so a stray QGIS import in `engine.py` would have surfaced as a failed demo in a review room.
+
+**One caution carried forward from the A6 review (19 Aug 2026).** All three pre-existing §5.9 tests passed against the broken dedup, because each was built on the one shape where the defect is invisible, and the Review 2 demo asserted the claim too. When `docs/capture_coverage.md` §1 and §2 are filled in from a running QGIS, remember that a green suite was not evidence here.
 
 **Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but whether `PRE_EXECUTION_SCRIPT` exists and fires on the same paths is itself unverified, so **do not report `post_hook` durations in RQ2** until a row in `docs/capture_coverage.md` §4 confirms it.
 

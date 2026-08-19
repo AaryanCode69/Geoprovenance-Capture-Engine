@@ -1,7 +1,8 @@
 -- ============================================================================
 -- GeoProvenance — provenance database schema
 --
---   STATUS: *** DRAFT — NOT YET FROZEN ***
+--   STATUS: READY TO FREEZE — pending Person B and Person C sign-off.
+--   Every OPEN: item is closed; docs/CONTRACT_schema.md says the same thing.
 --   Becomes binding when tagged `contract-v1` with Person B and Person C's
 --   agreement (RULES.md §3.1). Until then, change it freely. After then, the
 --   change procedure in RULES.md §3.4 is mandatory — it breaks two other
@@ -58,7 +59,7 @@ CREATE TABLE IF NOT EXISTS activities (
     execution_log   TEXT,
 
     -- [+A0.1] RQ1 instrumentation, per RULES.md §5.9 / §8.3.
-    capture_channel TEXT,                    -- 'post_hook' | 'history_signal' — which channel won
+    capture_channel TEXT,                    -- 'post_hook'|'run_wrapper'|'history_signal' — which won
     corroborations  INTEGER NOT NULL DEFAULT 0,  -- times the OTHER channel also saw this
     dedup_key       TEXT,                    -- (algorithm_id, params hash, started_at@100ms)
 

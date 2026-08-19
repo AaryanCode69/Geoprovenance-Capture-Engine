@@ -31,7 +31,8 @@ experiments/data/
 *.jp2
 !tests/fixtures/data/**
 
-# Editor / OS
+# Editor / OS / tooling
+.claude/
 .vscode/
 .idea/
 *.swp

@@ -268,6 +268,16 @@ def _install_hook_script(hook_dir, *, when: str, filename: str, handler: str,
     configured before, including an empty setting. Clobbering someone else's
     execution script is a defect, not a detail.
     """
+    # Import first, write second. Writing the script before knowing whether
+    # anything will ever run it left a generated file behind on a QGIS with no
+    # Processing — a file nothing points at and unload has no undo for.
+    try:
+        from processing.core.ProcessingConfig import ProcessingConfig
+    except ImportError as exc:
+        log(f"Processing is not available, {when}-execution hook not installed: {exc}",
+            WARNING)
+        return lambda: None
+
     hook_dir = pathlib.Path(hook_dir)
     hook_dir.mkdir(parents=True, exist_ok=True)
     hook_path = hook_dir / filename
@@ -276,13 +286,6 @@ def _install_hook_script(hook_dir, *, when: str, filename: str, handler: str,
     hook_path.write_text(HOOK_TEMPLATE.format(
         plugin_parent=plugin_parent, handler=handler, when=when,
     ))
-
-    try:
-        from processing.core.ProcessingConfig import ProcessingConfig
-    except ImportError as exc:
-        log(f"Processing is not available, {when}-execution hook not installed: {exc}",
-            WARNING)
-        return lambda: None
 
     # UNVERIFIED (§5.10) — the attribute name is an informed guess, so fall
     # back to the literal string rather than crashing on a rename.
