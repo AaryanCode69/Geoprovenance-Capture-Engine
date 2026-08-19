@@ -35,6 +35,32 @@ print("OK")
 """
 
 
+#: Modules outside storage/ that make the SAME promise in their docstrings and
+#: are relied on for it, but that §4.1's guard never covered.
+#:
+#: capture/normalizer.py, capture/engine.py and capture/history_observer.py
+#: duck-type QGIS instead of importing it — that is what lets the risky logic
+#: be tested here and what lets both review demos run in a room with no QGIS
+#: (§7.3). lifecycle.py and log.py are the §5.4 and logging mechanisms,
+#: extracted precisely so they could be tested without QGIS (§6.1).
+#:
+#: Nothing asserted any of it. One `from qgis.core import ...` added to
+#: engine.py would have broken `make demo1`, `make demo2` and most of
+#: tests/capture with no guard tripping, and the failure would have surfaced
+#: in a review room rather than here.
+#:
+#: paths.py is deliberately absent: it imports QGIS by design (§4.8), which is
+#: the whole reason the default database location lives there and not in
+#: storage/.
+EXTRA_NO_QGIS_MODULES = (
+    "geoprovenance.capture.normalizer",
+    "geoprovenance.capture.engine",
+    "geoprovenance.capture.history_observer",
+    "geoprovenance.lifecycle",
+    "geoprovenance.log",
+)
+
+
 def _storage_modules() -> list[str]:
     modules = ["geoprovenance.storage"]
     modules += [
@@ -45,9 +71,13 @@ def _storage_modules() -> list[str]:
     return modules
 
 
-@pytest.mark.parametrize("module", _storage_modules())
+def _no_qgis_modules() -> list[str]:
+    return _storage_modules() + list(EXTRA_NO_QGIS_MODULES)
+
+
+@pytest.mark.parametrize("module", _no_qgis_modules())
 def test_storage_module_imports_without_qgis(module: str) -> None:
-    """Every module under storage/ imports cleanly with QGIS unavailable."""
+    """Every module that promises it imports cleanly with QGIS unavailable."""
     code = _PROBE.format(banned=BANNED, module=module)
     result = subprocess.run(
         [sys.executable, "-c", code],
