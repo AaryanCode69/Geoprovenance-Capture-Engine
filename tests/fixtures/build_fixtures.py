@@ -60,7 +60,11 @@ from geoprovenance.storage.store import (  # noqa: E402
 )
 
 sys.path.insert(0, str(HERE))
-from _minifiles import write_point_geopackage, write_point_shapefile  # noqa: E402
+from _minifiles import (  # noqa: E402
+    normalise_sqlite_header,
+    write_point_geopackage,
+    write_point_shapefile,
+)
 
 OUT_DIR = HERE
 MOCK_DB = OUT_DIR / "mock_provenance.db"
@@ -721,6 +725,12 @@ def main(out_dir: pathlib.Path | None = None) -> int:
         events += build_workflow_2(store, agent_334)
         events += build_workflow_3(store, agent_340)
         counts = store.counts()
+
+    # The committed database must be byte-identical on B's and C's machines
+    # too, and SQLite stamps its own version into every file it writes
+    # (see _minifiles.normalise_sqlite_header). Done after the store is closed
+    # so nothing is rewritten underneath an open connection.
+    normalise_sqlite_header(MOCK_DB)
 
     validate_events(events)
     MOCK_EVENTS.write_text(json.dumps(events, indent=2, sort_keys=False) + "\n")

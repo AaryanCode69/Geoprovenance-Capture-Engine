@@ -143,6 +143,40 @@ _GPKG_USER_VERSION = 10300         # 1.3.0
 _GPKG_FIXED_LAST_CHANGE = "2026-08-08T10:00:00.000Z"
 
 
+#: Bytes 92-99 of every SQLite file are the "version-valid-for" number and
+#: SQLITE_VERSION_NUMBER — the version of the library that last wrote the file.
+#: They are informational: SQLite treats the stored version number as stale
+#: whenever version-valid-for disagrees with the change counter, and re-stamps
+#: both on the next write. Nothing reads them for correctness.
+_SQLITE_VERSION_FIELD = slice(92, 100)
+
+
+def normalise_sqlite_header(path) -> None:
+    """Blank the SQLite-version stamp so the file is byte-identical anywhere.
+
+    Everything else in this module is written for byte determinism — a fixed
+    ``last_change``, a fixed page size, no autoincrement drift — because the
+    fixtures are COMMITTED and shared (RULES.md §10.3), and a churning binary
+    diff hides real changes.
+
+    The version stamp defeated all of it. A GeoPackage written by SQLite
+    3.51.2 and one written by 3.53.4 differ in exactly these bytes, so the
+    file's SHA-256 differs too — and ``build_fixtures.py`` records that hash in
+    ``mock_provenance.db``. The result was that Person B and Person C could not
+    reproduce the committed fixtures on their own machines at all, and the test
+    that noticed blamed them for hand-editing.
+
+    Test-only. Nothing under ``geoprovenance/`` may call this: the plugin must
+    never rewrite bytes underneath SQLite.
+    """
+    path = pathlib.Path(path)
+    raw = bytearray(path.read_bytes())
+    if len(raw) < _SQLITE_VERSION_FIELD.stop or bytes(raw[:15]) != b"SQLite format 3":
+        return
+    raw[_SQLITE_VERSION_FIELD] = b"\x00" * 8
+    path.write_bytes(bytes(raw))
+
+
 def _gpkg_point_blob(x: float, y: float, srs_id: int = 4326) -> bytes:
     """A GeoPackageBinary point: 8-byte header + little-endian WKB point."""
     flags = 0b0000_0001  # little-endian header, no envelope, standard geometry
@@ -233,4 +267,5 @@ def write_point_geopackage(
         conn.commit()
     finally:
         conn.close()
+    normalise_sqlite_header(path)
     return path

@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import pathlib
+import sqlite3
 import struct
 import sys
 
@@ -319,9 +320,42 @@ def test_rebuilding_produces_byte_identical_fixtures(tmp_path):
     assert not differing, f"non-deterministic fixture output: {differing}"
 
 
+#: Suffixes whose bytes are written by the SQLite library rather than by us.
+_SQLITE_SUFFIXES = (".db", ".gpkg")
+
+
+def _logical_content(path: pathlib.Path) -> bytes:
+    """A canonical dump of a SQLite file, independent of the SQLite build.
+
+    Bytes 96-99 of every SQLite file are SQLITE_VERSION_NUMBER — the version of
+    the library that wrote it — and later releases also shift page layout
+    slightly. So a byte comparison of a committed .db against a fresh build
+    answers "was this written by the same SQLite?", not the question
+    RULES.md §10.3 actually asks, which is "did somebody hand-edit it?".
+
+    Person B and Person C run this suite on their own machines. Comparing bytes
+    made this test fail for them on any different SQLite build, with a message
+    telling them to regenerate the committed artefact and notify the team —
+    which would churn the shared fixture on every such run. The schema and the
+    rows are what B and C consume, so those are what is compared.
+    """
+    with contextlib.closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as conn:
+        return "\n".join(conn.iterdump()).encode("utf-8")
+
+
+def _fixture_content(path: pathlib.Path) -> bytes:
+    if path.suffix in _SQLITE_SUFFIXES:
+        return _logical_content(path)
+    return path.read_bytes()
+
+
 def test_committed_fixtures_match_a_fresh_build(tmp_path):
     """The committed files are what build_fixtures.py currently produces —
-    i.e. nobody hand-edited them (RULES.md §10.3)."""
+    i.e. nobody hand-edited them (RULES.md §10.3).
+
+    SQLite files are compared by their contents rather than their bytes; see
+    _logical_content for why the difference matters to B and C.
+    """
     import build_fixtures
 
     fresh = tmp_path / "fresh"
@@ -331,7 +365,9 @@ def test_committed_fixtures_match_a_fresh_build(tmp_path):
     stale = []
     for rel in sorted(p.relative_to(fresh) for p in fresh.rglob("*") if p.is_file()):
         committed = FIXTURES / rel
-        if not committed.is_file() or committed.read_bytes() != (fresh / rel).read_bytes():
+        if not committed.is_file():
+            stale.append(str(rel))
+        elif _fixture_content(committed) != _fixture_content(fresh / rel):
             stale.append(str(rel))
     assert not stale, (
         f"committed fixtures differ from a fresh build: {stale}. "
