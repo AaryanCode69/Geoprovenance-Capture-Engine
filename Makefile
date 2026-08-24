@@ -11,8 +11,26 @@
 
 PY := .venv/bin/python
 
+# How to run a script inside QGIS's own Python.
+#
+# QGIS on this machine is the Flathub build, which is sandboxed: its Python
+# cannot see the repository unless told to, and PyQGIS is not on its path by
+# default (qgis lives in /app/share/qgis/python, the processing plugin one
+# directory further down). QGIS_PREFIX_PATH must point at /app, not /usr.
+#
+# Override the whole thing for a native install:
+#     make qgis-demo-project QGIS_PY=python3
+QGIS_APP    := org.qgis.qgis
+QGIS_PYPATH := /app/share/qgis/python:/app/share/qgis/python/plugins:$(CURDIR)
+QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
+                 --env=PYTHONPATH=$(QGIS_PYPATH) \
+                 --env=QGIS_PREFIX_PATH=/app \
+                 --env=QT_QPA_PLATFORM=offscreen $(QGIS_APP)
+
 .PHONY: help venv test test-storage test-plugin test-capture test-qgis fixtures icon \
-        deploy undeploy qgis demo1 demo2 demo3 schema-check clean
+        deploy undeploy qgis demo1 demo2 demo3 schema-check clean \
+        qgis-demo qgis-demo-inputs qgis-demo-record qgis-demo-run qgis-demo-layers \
+        qgis-demo-project qgis-demo-verify qgis-demo-open qgis-demo-clean
 
 help:
 	@echo "make test          EVERYTHING that runs without QGIS — the usual one"
@@ -31,6 +49,15 @@ help:
 	@echo "make schema-check  apply schema.sql to a throwaway database and report"
 	@echo "make demo1/2/3     run the Review 1 / Review 2 / Final demo"
 	@echo "make clean         remove caches, scratch dirs, and throwaway databases"
+	@echo ""
+	@echo "make qgis-demo         build the whole visual demo, end to end"
+	@echo "  qgis-demo-inputs     write the three starting datasets       (no QGIS)"
+	@echo "  qgis-demo-run        run the four steps inside QGIS          (needs QGIS)"
+	@echo "  qgis-demo-record     record the same four steps offline      (no QGIS)"
+	@echo "  qgis-demo-layers     turn the record into map layers         (no QGIS)"
+	@echo "  qgis-demo-project    style them into a QGIS project          (needs QGIS)"
+	@echo "  qgis-demo-verify     reopen the project and check every layer (needs QGIS)"
+	@echo "make qgis-demo-open    open the finished project in QGIS"
 
 venv:
 	python3 -m venv .venv
@@ -71,8 +98,9 @@ deploy:
 undeploy:
 	$(PY) tools/deploy.py unlink
 
+# The desktop application, on the development profile (RULES.md §2.4).
 qgis:
-	qgis --profile geoprov-dev
+	flatpak run $(QGIS_APP) --profile geoprov-dev
 
 schema-check:
 	@$(PY) -c "import sqlite3,pathlib,tempfile,os; \
@@ -94,3 +122,51 @@ demo3:
 clean:
 	rm -rf .pytest_cache demos/_scratch
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+
+# ---------------------------------------------------------------------------
+# The visual demo (qgis_demo/)
+#
+# Two of these steps need QGIS and three do not, which is deliberate: the parts
+# that decide what goes where run anywhere, and only the styling needs QGIS.
+# ---------------------------------------------------------------------------
+
+# These steps feed each other: the record cannot be drawn before it exists, and
+# the project cannot be styled before the layers are written. If make is run
+# with -j (or MAKEFLAGS carries it from the environment) they would otherwise
+# start together and fail in a confusing order.
+.NOTPARALLEL:
+
+qgis-demo: qgis-demo-inputs qgis-demo-run qgis-demo-layers qgis-demo-project qgis-demo-verify
+	@echo
+	@echo "Done. Open it with:  make qgis-demo-open"
+
+qgis-demo-inputs:
+	$(PY) -m qgis_demo.make_inputs
+
+# Runs the four steps in a real QGIS, so the outputs on disk are ones QGIS
+# actually produced and the record is one the capture code actually made.
+qgis-demo-run:
+	$(QGIS_PY) qgis_demo/run_in_qgis.py
+
+# The same four steps with no QGIS anywhere, for a machine that has none
+# (RULES.md §7.3). Writes the record but not the output files.
+qgis-demo-record:
+	$(PY) -m qgis_demo.replay
+
+qgis-demo-layers:
+	$(PY) -m qgis_demo.export_layers
+
+qgis-demo-project:
+	$(QGIS_PY) qgis_demo/build_project.py
+
+qgis-demo-verify:
+	$(QGIS_PY) qgis_demo/verify_project.py
+
+qgis-demo-open:
+	flatpak run $(QGIS_APP) --profile geoprov-dev qgis_demo/project/GeoProvenance.qgz
+
+qgis-demo-clean:
+	rm -rf qgis_demo/project qgis_demo/data/derived qgis_demo/_hooks \
+	       qgis_demo/provenance.db qgis_demo/provenance.db-wal \
+	       qgis_demo/provenance.db-shm qgis_demo/findings.txt

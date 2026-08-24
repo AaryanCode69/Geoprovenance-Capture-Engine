@@ -13,6 +13,17 @@ htmlcov/
 *.qgz~
 .qgis2/
 geoprov-dev/
+# pytest-qgis drops a settings directory here when the suite is run inside QGIS
+.qgis-settings/
+
+# The visual demo's generated artefacts (qgis_demo/README.md explains the rebuild).
+# The three INPUT datasets and the source scripts are committed; everything QGIS
+# or the exporter produces from them is not — it is all regenerable with one
+# command, and a 100 KB GeoPackage rewritten on every run is churn, not history.
+qgis_demo/data/derived/
+qgis_demo/project/
+qgis_demo/_hooks/
+qgis_demo/findings.txt
 
 # Runtime provenance databases (RULES.md §10.4)
 # NOTE: tests/fixtures/*.db is deliberately NOT ignored — it is a shared
