@@ -28,8 +28,26 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = REPO_ROOT / PLUGIN_DIR_NAME
 
 
-def profiles_root() -> pathlib.Path:
-    """Where QGIS 3 keeps its profiles on this platform."""
+# A Flatpak QGIS cannot see ~/.local/share/QGIS — it is sandboxed, and keeps its
+# profiles under ~/.var/app/<app-id>/. Linking into the native location would
+# silently produce a QGIS with no plugin in it, so the flatpak location is probed
+# first when a flatpak QGIS is actually installed.
+FLATPAK_APP_IDS = ("org.qgis.qgis",)
+
+
+def _flatpak_profiles_roots() -> list[pathlib.Path]:
+    """Profile directories belonging to installed Flatpak QGIS builds."""
+    home = pathlib.Path.home()
+    roots = []
+    for app_id in FLATPAK_APP_IDS:
+        app_dir = home / ".var/app" / app_id
+        if app_dir.is_dir():
+            roots.append(app_dir / "data/QGIS/QGIS3/profiles")
+    return roots
+
+
+def _native_profiles_root() -> pathlib.Path:
+    """Where a normally-installed QGIS 3 keeps its profiles on this platform."""
     home = pathlib.Path.home()
     system = platform.system()
     if system == "Linux":
@@ -41,11 +59,36 @@ def profiles_root() -> pathlib.Path:
     raise SystemExit(f"unsupported platform: {system}")
 
 
-def target_dir(profile: str) -> pathlib.Path:
-    return profiles_root() / profile / "python" / "plugins"
+def profiles_root(override: str | None = None) -> pathlib.Path:
+    """Where QGIS keeps its profiles, for the QGIS that is actually installed.
+
+    An explicit --profiles-root wins. Otherwise a native install wins if one is
+    present, because that is the ordinary case; a Flatpak install is used when
+    it is the only QGIS on the machine.
+    """
+    if override:
+        return pathlib.Path(override).expanduser()
+
+    native = _native_profiles_root()
+    if native.is_dir():
+        return native
+
+    for root in _flatpak_profiles_roots():
+        return root
+
+    # Neither exists yet. Prefer flatpak if the app is installed at all,
+    # since QGIS creates the profile directory on first launch.
+    flatpak_roots = _flatpak_profiles_roots()
+    if flatpak_roots:
+        return flatpak_roots[0]
+    return native
 
 
-def deploy(profile: str) -> int:
+def target_dir(profile: str, profiles_root_override: str | None = None) -> pathlib.Path:
+    return profiles_root(profiles_root_override) / profile / "python" / "plugins"
+
+
+def deploy(profile: str, profiles_root_override: str | None = None) -> int:
     if profile != DEV_PROFILE:
         raise SystemExit(
             f"refusing to deploy into profile {profile!r}. RULES.md §2.4: "
@@ -53,11 +96,11 @@ def deploy(profile: str) -> int:
             f"your working QGIS. Pass --profile {DEV_PROFILE}, or use "
             f"--i-know-what-i-am-doing."
         )
-    return _link(profile)
+    return _link(profile, profiles_root_override)
 
 
-def _link(profile: str) -> int:
-    plugins = target_dir(profile)
+def _link(profile: str, profiles_root_override: str | None = None) -> int:
+    plugins = target_dir(profile, profiles_root_override)
     plugins.mkdir(parents=True, exist_ok=True)
     link = plugins / PLUGIN_DIR_NAME
 
@@ -89,8 +132,8 @@ def _link(profile: str) -> int:
     return 0
 
 
-def undeploy(profile: str) -> int:
-    link = target_dir(profile) / PLUGIN_DIR_NAME
+def undeploy(profile: str, profiles_root_override: str | None = None) -> int:
+    link = target_dir(profile, profiles_root_override) / PLUGIN_DIR_NAME
     if not link.is_symlink():
         if link.exists():
             raise SystemExit(f"{link} exists but is not a symlink — leaving it alone.")
@@ -107,18 +150,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default=DEV_PROFILE)
     parser.add_argument("--i-know-what-i-am-doing", action="store_true",
                         help="allow a profile other than the dev one (§2.4)")
+    parser.add_argument("--profiles-root", default=None,
+                        help="override the QGIS profiles directory, for an "
+                             "install this script does not know how to find")
     args = parser.parse_args(argv)
 
     if args.action == "where":
         print(f"repo plugin : {SOURCE}")
-        print(f"profiles    : {profiles_root()}")
-        print(f"would link  : {target_dir(args.profile) / PLUGIN_DIR_NAME}")
+        print(f"profiles    : {profiles_root(args.profiles_root)}")
+        native = _native_profiles_root()
+        print(f"  native    : {native} "
+              f"({'exists' if native.is_dir() else 'not present'})")
+        for root in _flatpak_profiles_roots():
+            print(f"  flatpak   : {root} "
+                  f"({'exists' if root.is_dir() else 'not present'})")
+        print(f"would link  : "
+              f"{target_dir(args.profile, args.profiles_root) / PLUGIN_DIR_NAME}")
         return 0
     if args.action == "unlink":
-        return undeploy(args.profile)
+        return undeploy(args.profile, args.profiles_root)
     if args.i_know_what_i_am_doing:
-        return _link(args.profile)
-    return deploy(args.profile)
+        return _link(args.profile, args.profiles_root)
+    return deploy(args.profile, args.profiles_root)
 
 
 if __name__ == "__main__":
