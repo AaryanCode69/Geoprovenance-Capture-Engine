@@ -31,9 +31,31 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDockWidget, QLabel, QVBoxLayout, QWidget
 
+
+def _qt_enum(enum_name: str, member: str):
+    """One enum member, however this Qt chooses to expose it.
+
+    RULES.md §2.5 — feature-detect, do not assume. Qt 6 scopes enum members
+    under their enum type (``Qt.DockWidgetArea.RightDockWidgetArea``) and
+    removed the flat spelling; Qt 5 exposes them flat on ``Qt`` itself
+    (``Qt.RightDockWidgetArea``). Reading the scoped form first and falling back
+    to the flat one covers both, so the plugin loads on a PyQt5 QGIS 3.x and a
+    PyQt6 QGIS 4.x without a version test.
+    """
+    scope = getattr(Qt, enum_name, None)
+    if scope is not None:
+        value = getattr(scope, member, None)
+        if value is not None:
+            return value
+    return getattr(Qt, member)
+
+
 DOCK_OBJECT_NAME = "GeoProvenanceDock"
 DOCK_TITLE = "GeoProvenance"
-DEFAULT_DOCK_AREA = Qt.RightDockWidgetArea
+DEFAULT_DOCK_AREA = _qt_enum("DockWidgetArea", "RightDockWidgetArea")
+
+_ALIGN_TOP = _qt_enum("AlignmentFlag", "AlignTop")
+_ALIGN_LEFT = _qt_enum("AlignmentFlag", "AlignLeft")
 
 _PLACEHOLDER_TEXT = (
     "<b>GeoProvenance</b><br><br>"
@@ -56,7 +78,7 @@ class GeoProvenanceDockWidget(QDockWidget):
 
         self._placeholder = QLabel(_PLACEHOLDER_TEXT, self._container)
         self._placeholder.setWordWrap(True)
-        self._placeholder.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self._placeholder.setAlignment(_ALIGN_TOP | _ALIGN_LEFT)
         self._layout.addWidget(self._placeholder)
 
         self._content: QWidget | None = None

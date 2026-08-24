@@ -48,7 +48,14 @@ import uuid
 
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QInputDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
+
+try:  # Qt 5
+    from qgis.PyQt.QtWidgets import QAction
+except ImportError:  # Qt 6 moved QAction from QtWidgets to QtGui
+    # RULES.md §2.5 — feature-detect rather than test the QGIS version. This is
+    # the only class the plugin uses that changed module between Qt 5 and Qt 6.
+    from qgis.PyQt.QtGui import QAction
 
 from . import paths
 from .capture import history_observer, hooks

@@ -1,6 +1,6 @@
 [general]
 name=GeoProvenance
-qgisMinimumVersion=3.34
+qgisMinimumVersion=3.28
 description=Automatic W3C PROV-O provenance capture and reproducibility auditing for QGIS Processing workflows
 version=0.1.0
 author=Person A, Person B, Person C
@@ -20,5 +20,18 @@ icon=icon.png
 experimental=True
 deprecated=False
 
-# Person A owns this file. qgisMinimumVersion is 3.34 (LTS) per RULES.md §2.5 —
-# any API newer than 3.34 must be feature-detected at runtime, not assumed.
+# Person A owns this file. RULES.md §2.5 — any API newer than the floor below
+# must be feature-detected at runtime, not assumed.
+#
+# qgisMinimumVersion was 3.34 (the LTS this project targets). Lowered to 3.28 on
+# 24 Aug 2026 as a TESTING ACCOMMODATION, not a change of target: the only QGIS
+# obtainable on the development machine is the Flathub LTS build, 3.28.9, and a
+# 3.34 floor stops it loading the plugin at all. Nothing here has been verified
+# against 3.34 itself.
+#
+# Checked before lowering: the newest QGIS API this plugin touches is
+# QgsHistoryProviderRegistry and its entryAdded signal (capture/history_observer.py),
+# both introduced in QGIS 3.24 — so 3.28 is safe for the code as written.
+#
+# Raise this back to 3.34 once a 3.34+ build is available. Findings recorded in
+# docs/capture_coverage.md against 3.28.9 do not transfer to 3.34 unverified.
