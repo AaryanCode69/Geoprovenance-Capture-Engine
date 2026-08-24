@@ -198,8 +198,9 @@ def main() -> int:
         "by hand on the map is invisible to us, on purpose."
     )
     demo.limitation(
-        "This ran without QGIS open. The next step is watching it happen inside "
-        "a real QGIS window — that has not been proved yet."
+        "This ran without QGIS open, on purpose, so it works on any machine. "
+        "QGIS has since run the real thing — but on a newer QGIS than the one "
+        "we are building for, so how it behaves on that one is still unknown."
     )
 
     if store is not None:

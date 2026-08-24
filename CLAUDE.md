@@ -57,30 +57,41 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `demos/review2.py` + `docs/demos/REVIEW-2.md` — **the Review 2 gate**, passing (`make demo2`, 6/6, under a second, byte-identical run to run). Replays four recorded jobs through the real `record_event` path.
 - `tools/deploy.py`, `tools/make_icon.py`, `make deploy` / `make qgis`.
 - `schemas/event.schema.json` — draft; fixture events and built events both validate.
+- `qgis_demo/` — **the visual demonstration, complete and verified in QGIS (24 Aug 2026).** `make qgis-demo` builds it end to end: three input datasets, four Processing steps run inside a real QGIS which captures them, the record exported to map layers, and a styled QGIS project with four layer groups plus a printable page. `make qgis-demo-open` opens it. Every layer verified to load, draw and land in the right place by `make qgis-demo-verify`. Stdlib only — hand-rolled GeoPackage and Shapefile writers, and extents derived by reading file headers, because the record stores no geometry and the schema is frozen. Walkthrough in `qgis_demo/README.md`. This is demo scaffolding, deliberately outside `geoprovenance/` (RULES.md §1.1).
 
 **Stubs only** (docstring + rules): `demos/final.py`.
 
-**Not started:** Phase 2, Phase 3. **Phase 1 (A1–A6) is code-complete**; its exit criteria that need QGIS are not met and cannot be met here.
+**Not started:** Phase 2, Phase 3. **Phase 1 (A1–A6) is code-complete.** Its QGIS-dependent exit criteria are now **partly met**: the plugin loads and unloads cleanly in QGIS (11/11 lifecycle tests), a 4-step workflow was captured live at 100%, and `docs/capture_coverage.md` has real measurements in it. What is still missing is the other nine invocation-path rows, which need the desktop application driven by hand — and the fact that all of it was measured on QGIS 4.2.1, not the 3.34 LTS the project targets. See below.
 
-### What is UNVERIFIED and why
+### QGIS ran this — on QGIS 4.2.1, not the 3.34 target (24 Aug 2026)
 
-Nothing that requires a QGIS process has ever been executed — QGIS is not installed on this machine, so `pytest-qgis` cannot even import. Specifically:
+QGIS was installed on 24 August 2026 and the capture path has now executed inside it for the first time. **Read `docs/capture_coverage.md` before quoting anything from this section** — it holds the evidence and the caveats.
 
-| Unverified | Where | First check |
-|---|---|---|
-| Plugin loads/unloads cleanly in QGIS | `tests/capture/test_plugin_lifecycle.py` | `make test-qgis` |
-| `ProcessingConfig.POST_EXECUTION_SCRIPT` constant + persistence | `capture/hooks.py` | the log says whether the hook installed |
-| What variables QGIS puts in the hook namespace | `capture/hooks.py` | `handle_post_execution` logs the names it received — paste into `docs/capture_coverage.md` §4 |
-| Which invocation paths fire the hook (§5.11 — this is RQ1 evidence) | — | the coverage table |
-| Fixture `.shp` / `.gpkg` open in QGIS | `tests/fixtures/data/` | drag onto the canvas |
-| `qgis.utils.available_plugins` exists and is what A6 assumes | `capture/environment.py` | the `plugin_versions` block of the first captured job |
-| The A6 menu dialogs ("Start new workflow", "Name this workflow…") | `plugin.py` | click them; the record's grouping is the visible effect |
+**Which QGIS, and why it matters.** The intended Flathub 3.28.9 LTS build **cannot be installed**: it depends on the end-of-life runtime `org.kde.Platform//5.15-21.08`, and one object in that runtime returns HTTP 503 past 1 MiB from every Flathub CDN edge. QGIS **4.2.1** (Python 3.13.14, Qt 6.10.3, PyQt6) was the only obtainable build. `metadata.txt` was lowered to `qgisMinimumVersion=3.28` for this exercise, with the rationale in the file. **RULES.md §2.1 is not satisfied** — the `.venv` is 3.10.12 and QGIS runs 3.13.14.
+
+**The headline finding: the post-execution hook does not exist in QGIS 4.** `ProcessingConfig.POST_EXECUTION_SCRIPT` and `PRE_EXECUTION_SCRIPT` still exist as *settings* and still appear in the options dialog, but the entire QGIS 4.2.1 installation contains exactly one file that mentions either name — the settings definition itself. `Processing.runAlgorithm` has no hook call. Both hook scripts were written to disk correctly and neither was ever executed. **`capture/hooks.py` is not deleted**: the mechanism may still work on the 3.34 LTS this project targets, and that is precisely what could not be tested.
+
+**Capture was 4/4 = 100% anyway, entirely via the `run_wrapper` channel.** A5's decision to install three channels rather than trust one is what carried it. A single-channel design built on research doc §5.2 would have captured nothing on this QGIS.
+
+| Was unverified | Now |
+|---|---|
+| Plugin loads/unloads cleanly in QGIS | **Verified.** All 11 `-m qgis` tests in `tests/capture/test_plugin_lifecycle.py` pass inside QGIS 4.2.1 — load, unload, reload, no residue, Person C's `set_content` seam. The A1 exit criterion, met. |
+| `ProcessingConfig.POST_EXECUTION_SCRIPT` constant + persistence | **Verified, and the answer is bad.** The constants exist and hold the guessed strings; the feature behind them is gone (above). |
+| What variables QGIS puts in the hook namespace | **Still open, and unanswerable on QGIS 4** — the hook never fires, so there is nothing to log. |
+| Which invocation paths fire the hook (§5.11 — RQ1 evidence) | **1 of 10 rows measured** (`processing.run()` from a script). The other nine need the desktop application driven by hand. |
+| Fixture `.shp` / `.gpkg` open in QGIS | **Verified** against QGIS 4.2.1 *and* GDAL 3.13.3. See `tests/fixtures/README.md`. |
+| `qgis.utils.available_plugins` exists and is what A6 assumes | **Verified** — the attribute exists. It reported 0 in a headless run, which is correct; a desktop count is still needed. |
+| The A6 menu dialogs ("Start new workflow", "Name this workflow…") | **Still open.** The plugin is deployed (`make deploy`); nobody has clicked them. |
+| — new — `QgsHistoryProviderRegistry` | Lives in `qgis.gui`, **not** `qgis.core`, on QGIS 4. `history_observer.py` already reaches it correctly via `QgsGui.historyProviderRegistry()`; do not "tidy" that import. Installed and tore down cleanly, but never fired on a script-driven run. |
+| — new — **PyQt6 would have stopped the plugin loading** | `Qt.RightDockWidgetArea` and `Qt.AlignTop` do not exist on Qt 6 (enums are scoped). `ui/dock.py` now uses `_qt_enum()` and `plugin.py` falls back to `QtGui` for `QAction` — feature detection per §2.5, working on both PyQt5 and PyQt6. |
+
+**Do not run `pytest tests` inside QGIS.** Seven tests fail there, none of them a defect: they assert the *no-QGIS* degradation path on purpose (e.g. `test_the_default_needs_qgis_and_says_so_clearly` expects `QgisUnavailableError`). Use `make test` outside QGIS and `make test-qgis` inside. Running `test_regenerating_the_icon_produces_identical_bytes` inside QGIS also **rewrites `geoprovenance/icon.png`** — zlib differs between Python 3.10 and 3.13 — so check `git status` afterwards.
 
 The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven. A guard test now enforces that for `capture/normalizer.py`, `capture/engine.py`, `capture/history_observer.py`, `lifecycle.py` and `log.py` as well as `storage/` — it previously covered `storage/` only, so a stray QGIS import in `engine.py` would have surfaced as a failed demo in a review room.
 
 **One caution carried forward from the A6 review (19 Aug 2026).** All three pre-existing §5.9 tests passed against the broken dedup, because each was built on the one shape where the defect is invisible, and the Review 2 demo asserted the claim too. When `docs/capture_coverage.md` §1 and §2 are filled in from a running QGIS, remember that a green suite was not evidence here.
 
-**Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but whether `PRE_EXECUTION_SCRIPT` exists and fires on the same paths is itself unverified, so **do not report `post_hook` durations in RQ2** until a row in `docs/capture_coverage.md` §4 confirms it.
+**Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but on QGIS 4 neither hook runs at all (above), so this stays unresolved rather than fixed. **Do not report `post_hook` durations in RQ2**; on the only QGIS measured so far there are no `post_hook` rows to report.
 
 **Environment fingerprint changed in A6 (19 Aug 2026).** `environment.plugin_versions()` moved from `qgis.utils.active_plugins` (loaded) to `available_plugins` (installed), closing the `docs/CONTRACT_event.md` decision of 18 Aug. Agent rows written before and after describe the same machine but are not the same row — do not compare an RQ2 agent-row count naively across that date.
 
@@ -139,6 +150,19 @@ tests/
   storage/                  # MUST run with zero QGIS imports
   plugin/                   # MUST run with zero QGIS imports
   capture/                  # runs under pytest-qgis
+
+qgis_demo/                  # the visual demonstration — NOT plugin code (§1.1)
+  scenario.py               # the workflow, defined once; read by all three drivers
+  make_inputs.py            # writes the three starting datasets      (no QGIS)
+  run_in_qgis.py            # runs the four steps inside QGIS         (needs QGIS)
+  replay.py                 # records the same four steps offline     (no QGIS)
+  export_layers.py          # the record -> map layers                (no QGIS)
+  build_project.py          # map layers -> a styled .qgz + a page    (needs QGIS)
+  verify_project.py         # reopens the project and checks it       (needs QGIS)
+  geopkg.py  shapefile.py   # dependency-free format writers
+  footprints.py             # where a file sits on Earth, from its header
+  data/                     # inputs committed; data/derived/ is generated
+  project/                  # generated: GeoProvenance.qgz, overview.png
 
 experiments/                # RQ1 / RQ2 scripts, raw results, charts
 ```

@@ -85,9 +85,11 @@ WHAT WE STILL CAN'T DO:
     inside one sitting at QGIS. Two unrelated pieces of work
     that happen to open the same file get treated as one —
     that is what the 'Start new workflow' button is for.
-  • QGIS itself has never called us on this machine — there is
-    no QGIS installed on it. Everything above is our own code
-    doing the real work on jobs recorded earlier.
+  • QGIS has now run the real thing and we did record it — but
+    on a newer QGIS than the one we are building for. On that
+    newer one, the main way we planned to watch has been
+    removed; a backup way caught everything. How the version
+    we target behaves is still untested.
 
 ✅ 6 of 6 checks passed.
 ```
@@ -102,16 +104,33 @@ WHAT WE STILL CAN'T DO:
 
 **Step 3 is worth pausing on.** We watch for work in two places at once, in case one misses something. In the run above, one of the four jobs was reported by both. The record still shows four jobs — the second sighting is recognised as the same job and counted, not written down again. How often each watcher catches something the other misses is one of the numbers this project sets out to measure, and this is where that count comes from.
 
-## 6. Live version — not yet available
+## 6. Live version — now available
 
-Still no live QGIS walkthrough, for the same reason as Review 1: there is no QGIS on the machine this was built on. See section 7. The menu actions described in section 2 are written and their teardown is tested, but nobody has clicked them yet, and this document does not pretend otherwise.
+QGIS was installed on 24 August 2026. One command runs four real jobs, records them as
+they happen, and builds a map of the result:
+
+```bash
+make qgis-demo
+make qgis-demo-open
+```
+
+The map has four groups, top to bottom, and they tell the story in order: what we started
+with, what QGIS produced, **what we noticed automatically**, and where the record still
+has gaps. In the third group each job is a dot coloured by *how* we came to notice it, and
+each file is a rectangle drawn where that file actually sits on Earth. Click anything for
+its details. `qgis_demo/README.md` is the walkthrough.
+
+The menu actions described in section 2 now load in a real QGIS and their teardown is
+tested there — eleven checks covering load, unload, reload and leaving no trace behind,
+none of which had ever been executed before that date. Clicking them by hand is still
+outstanding, and this document does not pretend otherwise.
 
 ## 7. What this still can't do
 
-- **QGIS has still never called us.** Everything above is our own code doing the real work on jobs recorded earlier. The part where QGIS itself hands us a finished job remains the single biggest untested piece, and it stays at the top of the list.
+- **QGIS has now called us — on a newer QGIS than we are building for, where the main way we planned to watch turned out to be gone.** It is still listed in QGIS's own settings; nothing behind it runs any more. A second way of watching caught all four jobs, so the record was complete, but "we watch QGIS the way we designed to" is false on that version and we are not going to write it as though it were true. How the version we actually target behaves is untested, because it could not be installed.
 - **Jobs are tied together by the files they share, within one sitting at QGIS.** Two genuinely unrelated pieces of work that both happen to open `roads.shp` are treated as one. "Start new workflow" exists precisely for that, but it needs a person to press it — we do not guess.
 - **A job that touches no files at all stands alone.** Sometimes that is right and sometimes it is not; on the evidence available there is nothing to link it to, and inventing a link would be a guess dressed up as a record.
-- **We still do not know which ways of running a job we catch.** Toolbox, script, batch list, visual model builder — measuring that is one of the project's actual results, and it needs QGIS.
+- **We still do not know which ways of running a job we catch.** Toolbox, script, batch list, visual model builder. One of the four — from a script — is now measured, and we caught all of it. The other three need a person in front of QGIS, and measuring them is one of the project's actual results.
 - **No fingerprints, and nothing drawn on screen yet.** Checking a file is still the same file is Person B's part; the picture of how the files relate is Person C's. Both build on what this step now records.
 
 ## 8. Questions you might be asked

@@ -106,6 +106,24 @@ So **do not compare these two files byte for byte across machines**, and do not 
 
 One consequence is worth knowing about, because it is not obvious: the SHA-256 of `sample_areas.gpkg` is recorded as a **row inside** `mock_provenance.db`, so a residue byte in the GeoPackage would otherwise reappear as a content difference in the database. That single fingerprint's `hash_value` and `file_size_bytes` are therefore withheld from the committed-vs-fresh comparison; everything else about the row is still checked, and `test_real_input_files_exist_and_their_recorded_hash_is_correct` still verifies the hash byte-exactly against the file sitting beside it.
 
-## Known limitation
+## Do the data files actually open? — yes, verified 24 Aug 2026
 
-The Shapefile and GeoPackage are written against their format specifications by `_minifiles.py` and are structurally verified in the test suite (headers, declared lengths, record counts, WKB geometry parsing). They have **not** been opened in QGIS or validated with GDAL — neither is installed on the machine that generated them. If QGIS refuses to load one, that is a bug in `_minifiles.py`, not in your code; tell Person A.
+The Shapefile and GeoPackage are written against their format specifications by
+`_minifiles.py` and are structurally verified in the test suite (headers, declared
+lengths, record counts, WKB geometry parsing).
+
+Until 24 August 2026 that was *all* that could be said about them — neither QGIS nor GDAL
+was installed on the machine that generated them, and this section used to say so. Both
+have now been checked against both:
+
+| File | QGIS 4.2.1 | GDAL 3.13.3 (`ogrinfo`) |
+|---|---|---|
+| `data/sample_points.shp` | opens, valid, 8 features, `EPSG:4326` | 8 features, extent `77.56, 12.94 → 77.65, 13.02` |
+| `data/sample_areas.gpkg` | opens, valid, 4 features, `EPSG:4326` | 4 features, extent `77.58, 12.96 → 77.625, 12.99` |
+
+Note that `sample_areas.gpkg` holds **points**, despite its name. That has always been
+true; it is now confirmed by two independent readers rather than by the writer's own
+intent.
+
+If QGIS ever refuses to load one, that is still a bug in `_minifiles.py`, not in your
+code — tell Person A.

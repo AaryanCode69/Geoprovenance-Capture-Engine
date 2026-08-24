@@ -90,22 +90,49 @@ The line beginning `On :` will show *your* computer, not the one above. That is 
 
 **Step 3 is worth pausing on.** We watch for work in two places at once, in case one of them misses something. That means the same job often gets spotted twice. The record still shows it once — we recognise it as the same job and note the second sighting rather than duplicating it. How often each watcher catches something the other misses is one of the numbers this project sets out to measure.
 
-## 6. Live version — not yet available
+## 6. Live version — now available
 
-There is deliberately no live QGIS walkthrough for this review. See section 7.
+QGIS was installed on 24 August 2026, and it has now run this for real. One command:
+
+```bash
+make qgis-demo
+```
+
+QGIS runs four jobs over real data, our code records them while they happen, and the
+record is turned into a map you can open:
+
+```bash
+make qgis-demo-open
+```
+
+If you would rather click than type, the plugin itself is installed and ready:
+
+1. `make deploy`
+2. `make qgis`
+3. **Plugins → Manage and Install Plugins → Installed →** tick **GeoProvenance**
+4. **View → Panels → Log Messages →** the **GeoProvenance** tab, so you can watch it work
+5. Run any tool from the Processing Toolbox
+6. **Plugins → GeoProvenance → Provenance database…** shows the count going up
+
+One honest caveat before you do: the QGIS that could be installed here is a **newer
+version than this project targets**, and on that newer version the main way we planned to
+watch for work no longer exists. A backup way caught everything — see section 7.
 
 ## 7. What this still can't do
 
-- **It has not been run inside QGIS yet.** The demo above exercises the real record-keeping code — the same function QGIS will call — but the part where *QGIS itself* calls it has not been tested, because QGIS was not installed on the machine this was built on. This is the single most important thing to do next, and until it is done "it works" means "it works given QGIS calls us as expected".
+- **It has now run inside QGIS — but not the QGIS we are building for.** The version obtainable on this machine is newer than the one this project targets, and the two are far enough apart to matter. On the newer one, **the main way we planned to watch for work has been taken out of QGIS entirely.** The setting is still there in the options dialog; nothing behind it does anything any more. We only found that out by looking, which is the point of looking. A second way of watching caught all four jobs, so nothing was missed — but the claim "we watch QGIS the way we designed to" is, on that version, false, and we say so.
 - **We only see work done with QGIS's built-in tools.** Editing a shape by hand on the map is invisible to us. That is a deliberate boundary, not an oversight — a different QGIS add-on already covers hand edits, and trying to cover everything is how a three-month project becomes a two-year one.
-- **We do not yet know which ways of running a job we catch.** QGIS can run the same tool from a toolbox, from a script, from a batch list, or from a visual model builder. Whether all four reach us is an open question, and measuring it is one of the project's actual results — not a detail to sort out quietly.
+- **We still do not know which ways of running a job we catch.** QGIS can run the same tool from a toolbox, from a script, from a batch list, or from a visual model builder. One of those four — from a script — has now been measured, and we caught all of it. The other three need somebody sitting in front of QGIS clicking, and until that happens they are open. Measuring this is one of the project's actual results, not a detail to sort out quietly.
 - **No fingerprints yet.** We record *which* file was used, but not yet a check that the file is still the same file. That is Person B's part, coming next.
 - **Nothing is drawn on screen.** The record exists but there is no picture of it yet. That is Person C's part.
 
 ## 8. Questions you might be asked
 
 **Q. If QGIS is not running, what exactly did this demo prove?**
-A. It proved the record-keeping half: given a finished job, we correctly work out what was read, what was made, and what settings were used, and we store it so it can be read back. The untested half is QGIS handing us the job in the first place. Splitting it this way was deliberate — it means most of the system can be tested on any laptop, including in this room.
+A. It proved the record-keeping half: given a finished job, we correctly work out what was read, what was made, and what settings were used, and we store it so it can be read back. Splitting it this way was deliberate — it means most of the system can be tested on any laptop, including in this room. The other half, QGIS handing us the job, has since been tested too; section 6 has the command and section 7 has the catch.
+
+**Q. You said a way of watching had been removed from QGIS. Isn't that fatal?**
+A. It would have been, if we had only built one. We built three, because we did not know which would work — and that turned out to be the right call rather than a lucky one. On the newer QGIS the primary way is gone and a backup caught every job. That result is worth more to the write-up than a clean run would have been: it is evidence that watching one place is not safe.
 
 **Q. Does this slow QGIS down?**
 A. Measuring that is one of the project's four research questions, with a target of under 5%. Writing the record took a few thousandths of a second here, but a proper measurement with real data comes later.

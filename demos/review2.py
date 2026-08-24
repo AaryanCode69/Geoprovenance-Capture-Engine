@@ -269,9 +269,10 @@ def main() -> int:
         "workflow' button is for."
     )
     demo.limitation(
-        "QGIS itself has never called us on this machine — there is no QGIS "
-        "installed on it. Everything above is our own code doing the real "
-        "work on jobs recorded earlier."
+        "QGIS has now run the real thing and we did record it — but on a newer "
+        "QGIS than the one we are building for. On that newer one, the main way "
+        "we planned to watch has been removed; a backup way caught everything. "
+        "How the version we target behaves is still untested."
     )
 
     if store is not None:
