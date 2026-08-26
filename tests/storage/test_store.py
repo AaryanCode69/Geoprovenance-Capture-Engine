@@ -56,7 +56,7 @@ def test_applies_full_schema(store):
 
 def test_sets_schema_version(store):
     """Appendix B.6 — a versioned database, from day one."""
-    assert store.schema_version() == migrations.CURRENT_VERSION == 1
+    assert store.schema_version() == migrations.CURRENT_VERSION == 2
 
 
 def test_creates_required_indices(store):
@@ -96,7 +96,7 @@ def test_reopening_preserves_data(db_path):
 
     second = ProvenanceStore(db_path)
     assert second.get_entity(entity_id)["label"] == "roads.shp"
-    assert second.schema_version() == 1
+    assert second.schema_version() == 2
     second.close()
 
 
@@ -123,18 +123,60 @@ def test_refuses_database_from_a_newer_schema(db_path):
 
 def test_timestamps_are_microsecond_precision():
     """Appendix B.4 — second resolution collides under
-    fingerprints UNIQUE(entity_id, computed_at)."""
+    fingerprints UNIQUE(entity_id, hash_strategy, computed_at)."""
     assert MICROSECOND_ISO.match(utc_now_iso())
 
 
-def test_two_fingerprints_in_the_same_second_both_land(store):
-    """Appendix B.4, the actual failure it prevents: Person B hashes an input
-    and an output inside the same tick."""
-    entity = store.add_entity(file_path="/data/roads.shp")
+def test_an_input_and_an_output_hashed_in_the_same_tick_both_land(store):
+    """Appendix B.4's stated case: Person B hashes an input and an output
+    inside the same tick.
+
+    Two entities, because that is what an input and an output are. The
+    previous version of this test used ONE entity for both, which is not the
+    scenario the docstring describes and, under
+    UNIQUE(entity_id, hash_strategy, computed_at), is a genuine duplicate —
+    the same file measured the same way at the same instant. It passed only
+    while hash_strategy was nullable, since SQLite counts each NULL in a
+    UNIQUE as distinct.
+    """
+    source = store.add_entity(file_path="/data/roads.shp")
+    result = store.add_entity(file_path="/out/buffered.shp")
     with store.transaction():
-        store.add_fingerprint(entity_id=entity, hash_value="aaa")
-        store.add_fingerprint(entity_id=entity, hash_value="bbb")
+        store.add_fingerprint(entity_id=source, hash_value="aaa")
+        store.add_fingerprint(entity_id=result, hash_value="bbb")
+    assert len(store.get_fingerprints_for(source)) == 1
+    assert len(store.get_fingerprints_for(result)) == 1
+
+
+def test_several_methods_for_one_file_in_the_same_tick_all_land(store):
+    """v2's reason for existing: complementary measurements are not duplicates.
+
+    Person B computes a byte hash and a description hash together so they can
+    be compared against each other — a hash that moved while the feature count
+    did not is a re-save, not an edit.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    stamp = "2026-08-26T14:00:00.123456+00:00"
+    with store.transaction():
+        store.add_fingerprint(entity_id=entity, hash_value="aaa",
+                              hash_strategy="file", computed_at=stamp)
+        store.add_fingerprint(entity_id=entity, hash_value="bbb",
+                              hash_strategy="schema_sample", computed_at=stamp)
     assert len(store.get_fingerprints_for(entity)) == 2
+
+
+def test_the_same_file_measured_the_same_way_twice_is_still_rejected(store):
+    """The other half of v2: widening the key must not stop catching duplicates.
+
+    hash_strategy is NOT NULL precisely so this holds on the default call path
+    — a nullable column in a UNIQUE disables the check for every row that
+    leaves it unset.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    stamp = "2026-08-26T14:00:00.123456+00:00"
+    store.add_fingerprint(entity_id=entity, hash_value="aaa", computed_at=stamp)
+    with pytest.raises(sqlite3.IntegrityError):
+        store.add_fingerprint(entity_id=entity, hash_value="aaa", computed_at=stamp)
 
 
 def test_ids_are_uuid4_strings(store):

@@ -102,8 +102,9 @@ def utc_now_iso() -> str:
 
     ``timespec="microseconds"`` is not optional. Plain ``.isoformat()`` drops the
     fractional part when it happens to be zero, which produces a timestamp that
-    fails the event schema's pattern AND collides under
-    ``fingerprints UNIQUE(entity_id, computed_at)``.
+    fails the event schema's pattern AND narrows
+    ``fingerprints UNIQUE(entity_id, hash_strategy, computed_at)`` to whole
+    seconds, so a file legitimately re-measured within one second collides.
     """
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
@@ -641,7 +642,7 @@ class ProvenanceStore:
         entity_id: str,
         hash_value: str,
         hash_algorithm: str = "SHA-256",
-        hash_strategy: str | None = None,
+        hash_strategy: str = "file",
         file_size_bytes: int | None = None,
         feature_count: int | None = None,
         computed_at: str | None = None,
@@ -649,9 +650,21 @@ class ProvenanceStore:
     ) -> str:
         """Record a dataset fingerprint. Person B computes it; Person A stores it.
 
-        ``computed_at`` MUST be microsecond precision — the table declares
-        ``UNIQUE(entity_id, computed_at)`` and B hashes input and output inside
-        the same second (Appendix B.4). Defaults to a correct value.
+        The table declares ``UNIQUE(entity_id, hash_strategy, computed_at)`` —
+        one fingerprint per dataset, per method, per instant. Several
+        complementary measurements of one file may therefore be recorded
+        together; a genuine duplicate still matches on all three and is
+        rejected.
+
+        ``hash_strategy`` is not optional and defaults to ``'file'`` rather than
+        ``None``. It is part of that key, and SQLite treats every NULL in a
+        UNIQUE as distinct, so a NULL here would silently disable the duplicate
+        check for the row that used it.
+
+        ``computed_at`` MUST be microsecond precision (Appendix B.4) and
+        defaults to a correct value. Precision is necessary but not sufficient
+        on its own — the clock's granularity is a platform detail, which is why
+        the method is in the key rather than the instant alone.
         """
         fingerprint_id = fingerprint_id or new_id()
         self._write(

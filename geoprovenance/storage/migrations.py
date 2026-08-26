@@ -24,12 +24,68 @@ from __future__ import annotations
 import sqlite3
 
 #: Keep in sync with ``PRAGMA user_version`` at the top of schema.sql.
-CURRENT_VERSION = 1
+CURRENT_VERSION = 2
 
 #: version -> SQL statements taking the database from (version - 1) to version.
 #: v1 is the baseline and is created directly from schema.sql, so it is empty.
 MIGRATIONS: dict[int, list[str]] = {
     1: [],
+    # v2 — `fingerprints` UNIQUE gains hash_strategy.
+    #
+    # WHY. The old key was (entity_id, computed_at): one fingerprint per file
+    # per instant. That treats a byte hash and a schema hash of the same file
+    # as duplicates, when they are two different measurements taken together
+    # on purpose — Person B compares them against each other to tell a re-save
+    # apart from a real edit. It also made row identity depend on the clock's
+    # granularity, which is a platform detail: 13 of 30 same-file writes were
+    # rejected on Windows, where datetime.now() advances about once per
+    # millisecond. Genuine duplicates are still blocked, because a true
+    # duplicate matches on strategy too.
+    #
+    # hash_strategy also becomes NOT NULL DEFAULT 'file'. That is not tidying:
+    # SQLite treats every NULL in a UNIQUE as DISTINCT, so a nullable column in
+    # the key would let two identical rows both land whenever the strategy was
+    # left unset — removing the very protection this key exists to give, on the
+    # default call path. Existing NULLs backfill to 'file', which is what they
+    # were: the byte-hash strategy, and the only one written before v2.
+    #
+    # HOW. SQLite cannot alter a table-level UNIQUE in place — there is no
+    # ALTER TABLE ... DROP CONSTRAINT — so the table is rebuilt: new shape,
+    # copy, drop, rename, then put the index back (dropping a table drops its
+    # indices with it). Column order and types are otherwise unchanged.
+    #
+    # Foreign keys are left alone deliberately. Nothing REFERENCES
+    # fingerprints, so dropping it orphans nothing; and toggling
+    # `PRAGMA foreign_keys` here would silently no-op inside the caller's
+    # transaction, which is worse than not touching it.
+    2: [
+        """
+        CREATE TABLE fingerprints_v2 (
+            id               TEXT PRIMARY KEY,
+            entity_id        TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+            hash_algorithm   TEXT NOT NULL DEFAULT 'SHA-256',
+            hash_value       TEXT NOT NULL,
+            hash_strategy    TEXT NOT NULL DEFAULT 'file',
+            file_size_bytes  INTEGER,
+            feature_count    INTEGER,
+            computed_at      TEXT NOT NULL,
+
+            UNIQUE (entity_id, hash_strategy, computed_at)
+        )
+        """,
+        """
+        INSERT INTO fingerprints_v2
+            (id, entity_id, hash_algorithm, hash_value, hash_strategy,
+             file_size_bytes, feature_count, computed_at)
+        SELECT id, entity_id, hash_algorithm, hash_value,
+               coalesce(hash_strategy, 'file'),
+               file_size_bytes, feature_count, computed_at
+        FROM fingerprints
+        """,
+        "DROP TABLE fingerprints",
+        "ALTER TABLE fingerprints_v2 RENAME TO fingerprints",
+        "CREATE INDEX IF NOT EXISTS idx_fingerprints_entity ON fingerprints (entity_id)",
+    ],
 }
 
 

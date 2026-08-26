@@ -63,7 +63,7 @@ def test_all_fixture_artefacts_are_present():
 
 
 def test_database_is_at_the_current_schema_version(fixture_store):
-    assert fixture_store.schema_version() == 1
+    assert fixture_store.schema_version() == 2
 
 
 def test_row_counts_are_as_published(fixture_store):
