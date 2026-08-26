@@ -15,7 +15,7 @@
 --   RULES.md §4.1 — nothing that reads this file may import QGIS.
 -- ============================================================================
 
-PRAGMA user_version = 1;   -- Appendix B.6. Bumped only via storage/migrations.py.
+PRAGMA user_version = 2;   -- Appendix B.6. Bumped only via storage/migrations.py.
 
 
 -- ---------------------------------------------------------------------------
@@ -100,15 +100,33 @@ CREATE TABLE IF NOT EXISTS fingerprints (
     entity_id        TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
     hash_algorithm   TEXT NOT NULL DEFAULT 'SHA-256',
     hash_value       TEXT NOT NULL,
-    hash_strategy    TEXT,                   -- [+A0.1] 'file' | 'schema_sample' — B's tiered fallback
+    -- [+A0.1] 'file' | 'schema_sample' — B's tiered fallback (research doc §6.4).
+    -- NOT NULL because it is part of the uniqueness key below, and SQLite treats
+    -- every NULL in a UNIQUE as distinct — a nullable column there would let two
+    -- identical rows both land whenever it was left unset, which is precisely
+    -- the protection the key exists to give. Every fingerprint was produced by
+    -- some method, so there is no row this makes unrepresentable.
+    hash_strategy    TEXT NOT NULL DEFAULT 'file',
     file_size_bytes  INTEGER,
     feature_count    INTEGER,
     computed_at      TEXT NOT NULL,
 
-    -- Appendix B.4: microsecond ISO 8601 is MANDATORY. B hashes input and
-    -- output inside the same second; at second resolution this constraint
-    -- fires and the second insert fails.
-    UNIQUE (entity_id, computed_at)
+    -- One fingerprint per dataset, PER METHOD, per instant.
+    --
+    -- hash_strategy is in the key because a byte hash and a schema hash of the
+    -- same file are two different MEASUREMENTS, not a duplicate submitted
+    -- twice. Person B computes several together so they can be compared
+    -- against each other — a hash that moved while the feature count and
+    -- extent did not is a re-save, not an edit — and without the strategy
+    -- column here the second and third are rejected as duplicates.
+    --
+    -- Appendix B.4 still applies: microsecond ISO 8601 is MANDATORY. It is
+    -- not, however, sufficient on its own. The clock's granularity is a
+    -- platform detail (Windows advances datetime.now() roughly once per
+    -- millisecond, Linux far faster), so leaving strategy out of the key made
+    -- row identity depend on WHEN a row was written rather than WHAT it is —
+    -- measured at 13 rejections in 30 runs on Windows.
+    UNIQUE (entity_id, hash_strategy, computed_at)
 );
 
 

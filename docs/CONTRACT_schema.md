@@ -11,7 +11,7 @@
 | **Consumers** | Person B (writes through `ProvenanceStore`), Person C (reads) |
 | **Implementation** | `geoprovenance/storage/schema.sql` |
 | **Baseline** | Research doc §7.1, verbatim, plus the six decisions below |
-| **Version** | `PRAGMA user_version = 1` |
+| **Version** | `PRAGMA user_version = 2` |
 
 ---
 
@@ -82,7 +82,28 @@ qgis_param_key TEXT,   -- 'OVERLAY' — the original QGIS key, unmodified
 datetime.now(timezone.utc).isoformat()
 ```
 
-*Why:* `fingerprints` declares `UNIQUE(entity_id, computed_at)`. B hashes input and output inside the same second; at second resolution the constraint fires and the second insert fails.
+*Why:* every timestamp in the schema is compared, ordered, or made part of a key, and second resolution is too coarse for all three inside a single processing run.
+
+#### The fingerprints key — corrected 26 Aug 2026 (v2)
+
+*Originally this decision read: "`fingerprints` declares `UNIQUE(entity_id, computed_at)`. B hashes input and output inside the same second; at second resolution the constraint fires and the second insert fails." **That rationale named a case the constraint cannot produce.*** An input and an output are different entities, so their rows differ on `entity_id` and never collide, at any resolution.
+
+The case the key really governs is **the same entity measured more than once**, and there the old key was wrong in two ways:
+
+1. **It called complementary measurements duplicates.** A byte hash and a schema hash of one file are two different measurements of that file, computed together on purpose so they can be compared against each other. Under `(entity_id, computed_at)` the second one is rejected.
+2. **It made row identity depend on the clock.** Whether two such rows survived came down to whether the clock ticked between them — a platform detail. Measured: **13 rejections in 30 runs on Windows**, where `datetime.now()` advances roughly once per millisecond; effectively invisible on Linux.
+
+```sql
+hash_strategy    TEXT NOT NULL DEFAULT 'file',
+...
+UNIQUE (entity_id, hash_strategy, computed_at)
+```
+
+Read as **one fingerprint per dataset, per method, per instant.** Complementary measurements are permitted because they differ on `hash_strategy`; a genuine duplicate still matches on all three and is still blocked.
+
+**`NOT NULL` is load-bearing.** SQLite counts every NULL in a `UNIQUE` as distinct — the same rule decision 1 relies on so that memory layers (`file_path IS NULL`) never deduplicate against each other. Here that rule works against us: a nullable `hash_strategy` in the key means two identical rows both land whenever it is left unset, removing the very protection the key exists to give. Every fingerprint was produced by some method, so `NOT NULL` makes no legitimate row unrepresentable.
+
+Microsecond precision remains mandatory — it is necessary, it was simply never sufficient on its own.
 
 ### 5. Session grouping — `activities.session_id`
 
@@ -123,6 +144,7 @@ Every post-freeze change needs a dated row here, per `RULES.md` §3.4 step 2.
 
 | Date | Version | Change | Who must update what |
 |---|---|---|---|
+| 2026-08-26 | **2** (draft) | **`fingerprints` UNIQUE gains `hash_strategy`, which also becomes `NOT NULL DEFAULT 'file'`.** `(entity_id, computed_at)` → `(entity_id, hash_strategy, computed_at)`. Decision 4's fingerprint rationale is corrected above — it named a collision the old key could not produce (input and output are different entities and never collide) and missed the one it did. The new key permits several complementary measurements of one file at one instant, which is what Person B's layered fingerprinting needs, while still blocking genuine duplicates. It also removes 13-in-30 spurious rejections measured on Windows, where row identity had been depending on clock granularity. **`NOT NULL` is part of the fix, not tidying:** SQLite counts every NULL in a `UNIQUE` as distinct, so a nullable column in the key silently disables the duplicate check for any row that leaves it unset — which was the default call path. No new column; `hash_strategy` already existed, and existing NULLs backfill to `'file'`, which is what they were. `user_version` 1 → 2; the forward migration rebuilds the table, because SQLite has no `ALTER TABLE … DROP CONSTRAINT`. | **Person A:** the migration runs on open; row data is preserved (verified against the committed v1 fixture — 22 rows, `integrity_check` ok, `foreign_key_check` clean). **One change inside `store.py`:** `add_fingerprint`'s `hash_strategy` default moves from `None` to `'file'`, because an explicit `None` bypasses a column default and would now hit `NOT NULL`. Keyword-only, nothing calls it positionally. `test_two_fingerprints_in_the_same_second_both_land` is replaced by three tests — its body used one entity for what its docstring called "an input and an output", which under the new key is a genuine duplicate. **Person B:** pass `hash_strategy` whenever you write more than one measurement for a file. **Person C:** re-pull the fixtures. A file may now carry several fingerprint rows at one instant, one per method — `get_latest_fingerprint()` returns the newest of *any* method, so filter on `hash_strategy` if your audit specifically means the byte hash. |
 | 2026-08-19 | 1 (draft) | **No DDL change.** `schema.sql`'s comment on `activities.capture_channel` listed only `post_hook` and `history_signal`; the code has emitted three values since A3 and both `docs/CONTRACT_event.md` and `schemas/event.schema.json` list `run_wrapper`. Comment corrected, status wording aligned with this document. Separately, the committed fixtures were regenerated: SQLite stamps its own library version into every file it writes, so `sample_areas.gpkg` — and therefore the SHA-256 of it recorded in `mock_provenance.db` — differed on every machine with a different SQLite build. `build_fixtures.py` now blanks that header field. | **Person B and Person C: re-pull `tests/fixtures/mock_provenance.db` and `tests/fixtures/data/sample_areas.gpkg`.** The only row that changed is the `fingerprints` hash for `sample_areas.gpkg`; entity, activity, agent, relation and workflow ids are all unchanged, so pinned ids in your tests still resolve. `mock_events.json` and `mock_ids.json` are byte-identical. |
 | 2026-08-18 | 1 (draft) | **Decision 1's `OPEN:` item closed; status is now READY TO FREEZE.** `content_version` bumps when a size + mtime probe disagrees with what was recorded, not on every write. The probe is stored in the existing `entities.metadata_json`, so **no DDL change and no migration** — `user_version` stays 1. | **Person B:** do not bump `content_version` yourself. Attach your fingerprint to whichever version Person A minted; a hash that disagrees with the previous version is an audit finding for Person C, not a correction. **Person C:** re-running a workflow over unchanged files no longer produces a fresh node per output. |
 | — | 1 | Initial draft. Not yet frozen. | — |
