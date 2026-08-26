@@ -74,6 +74,22 @@ _ALGORITHM_ID_KEYS = ("algorithm_id", "algorithmId", "alg_id", "algorithm")
 _PARAMETER_KEYS = ("parameters", "algorithm_parameters", "params")
 _COMMAND_KEYS = ("python_command", "command", "pythonCommand")
 
+#: QGIS 4 does not put the algorithm's parameters directly under `parameters`.
+#: It wraps them: the real dict sits under `inputs`, alongside run metadata.
+#: Measured 26 Aug 2026 from a Toolbox Buffer on QGIS 4.2.1, where the stored
+#: `parameters_json` read
+#:
+#:     {"area_units": "m2", "distance_units": "meters",
+#:      "ellipsoid": "EPSG:7030",
+#:      "inputs": {"INPUT": "…/roads.shp", "DISTANCE": 10.0, …}}
+#:
+#: Two things went wrong because of that. The record kept `area_units` and
+#: friends as if a person had passed them, and — the expensive one — §5.9
+#: dedup could not fire against any other channel, because every other channel
+#: holds the FLAT dict. Unwrapping here is what lets one execution seen by two
+#: channels become one row with a corroboration instead of two rows.
+_PARAMETER_WRAPPER_KEYS = ("inputs",)
+
 #: Last resort: dig the algorithm id out of the recorded command string,
 #: e.g. processing.run("native:buffer", {...}).
 _COMMAND_ALGORITHM = re.compile(r"""run\s*\(\s*["']([^"']+)["']""")
@@ -122,6 +138,7 @@ def parse_history_entry(payload: Any) -> dict | None:
         parameters = _first_present(payload, _PARAMETER_KEYS)
         if not isinstance(parameters, dict):
             parameters = {}
+        parameters = _unwrap_parameters(parameters)
 
         return {
             "algorithm_id": algorithm_id,
@@ -132,6 +149,20 @@ def parse_history_entry(payload: Any) -> dict | None:
         return None
 
 
+def _unwrap_parameters(parameters: dict) -> dict:
+    """The algorithm's own parameters, unwrapped from QGIS 4's envelope.
+
+    Returns ``parameters`` unchanged when there is no envelope, so a QGIS 3
+    history entry — which is believed to store the flat dict directly — is
+    unaffected. Feature detection, not a version test (§2.5).
+    """
+    for key in _PARAMETER_WRAPPER_KEYS:
+        inner = parameters.get(key)
+        if isinstance(inner, dict) and inner:
+            return inner
+    return parameters
+
+
 def entry_timestamp(value: Any) -> str | None:
     """A microsecond ISO 8601 string for a history entry's timestamp, or None.
 
@@ -139,24 +170,43 @@ def entry_timestamp(value: Any) -> str | None:
     reason the normalizer duck-types QGIS values: the class moves, the shape
     does not. Handles a QDateTime (via toPyDateTime), a datetime, and a string
     that already looks like ISO 8601.
+
+    A NAIVE value is LOCAL time and is converted, never relabelled
+    (measured 26 Aug 2026)
+        QGIS hands its history timestamps over with no offset attached, and
+        they are local. This used to do ``moment.replace(tzinfo=utc)``, which
+        asserts that 21:40 in Kolkata *is* 21:40 UTC rather than converting it
+        to 16:10 UTC. Everything Person A writes comes from ``utc_now_iso()``
+        and is genuinely UTC, so the two channels' clocks disagreed by the
+        whole local offset.
+
+        That is not a cosmetic error. §5.9 recognises a second sighting of one
+        execution inside a 2 second window, so at any non-zero offset it could
+        never match: every Toolbox job seen by both channels was written TWICE
+        and ``corroborations`` stayed at 0 — the very number the RQ1
+        per-channel split is made of (§8.3).
+
+        Invisible at UTC+0, which is why the test asserting the old behaviour
+        passed. The replacement pins a real offset.
     """
     if value is None:
         return None
     try:
-        if isinstance(value, str):
+        moment = value
+        if isinstance(moment, str):
             # Trust it only if it parses. A malformed string recorded as a
             # timestamp would corrupt the dedup bucket (§5.9).
-            dt.datetime.fromisoformat(value)
-            return value
-
-        moment = value
-        converter = getattr(value, "toPyDateTime", None)
-        if callable(converter):
-            moment = converter()
+            moment = dt.datetime.fromisoformat(moment)
+        else:
+            converter = getattr(moment, "toPyDateTime", None)
+            if callable(converter):
+                moment = converter()
 
         if isinstance(moment, dt.datetime):
             if moment.tzinfo is None:
-                moment = moment.replace(tzinfo=dt.timezone.utc)
+                # astimezone() on a naive datetime reads it as local time and
+                # attaches the local zone — the conversion replace() skipped.
+                moment = moment.astimezone()
             return moment.astimezone(dt.timezone.utc).isoformat(timespec="microseconds")
     except Exception:  # noqa: BLE001 — §5.1
         return None

@@ -19,7 +19,7 @@
 {
   "event_id": "uuid4",
   "session_id": "uuid4",
-  "source": "post_hook" | "run_wrapper" | "history_signal",  # dedup + RQ1 channels
+  "source": "post_hook" | "run_wrapper" | "history_signal" | "toolbox",  # dedup + RQ1 channels
   "algorithm_id": "native:buffer",
   "algorithm_name": "Buffer",
   "provider": "qgis",
@@ -76,7 +76,7 @@ QGIS hands the normalizer `QgsProcessingFeatureSourceDefinition`, `QgsCoordinate
 
 | Field | Note |
 |---|---|
-| `source` | Which channel produced the event: `post_hook` (the Processing post-execution hook), `run_wrapper` (the `processing.run` monkeypatch), `history_signal` (`QgsHistoryProviderRegistry.entryAdded`). Kept for dedup (`RULES.md` §5.9) **and** because the per-channel split is an RQ1 result (`RULES.md` §8.3). |
+| `source` | Which channel produced the event: `post_hook` (the Processing post-execution hook), `run_wrapper` (the `processing.run` monkeypatch), `history_signal` (`QgsHistoryProviderRegistry.entryAdded`), `toolbox` (the Processing Toolbox dialog's own execution path — both the threaded `QgsProcessingAlgRunnerTask` branch and the synchronous `execute()` one). Kept for dedup (`RULES.md` §5.9) **and** because the per-channel split is an RQ1 result (`RULES.md` §8.3). |
 | `started_at` / `ended_at` | Microsecond-precision UTC ISO 8601, always (`RULES.md` §3.2 decision 4). |
 | `status` | `failed` and `cancelled` events **are emitted**, never dropped — C's audit needs them and RQ1 completeness counts them (`RULES.md` §4.10). |
 | `crs` | `authid()` (`"EPSG:4326"`). WKT only when the CRS has no authid (`RULES.md` §5.7). |
@@ -114,6 +114,7 @@ The keys are present on **every** layer entry regardless of type rather than app
 
 | Date | Version | Change | Who must update what |
 |---|---|---|---|
+| 2026-08-26 | 1 (draft) | **`source` gains `toolbox`, a fourth channel.** Measured on QGIS 4.2.1: a Buffer and a Convex hull run from the **Processing Toolbox** were caught only by `history_signal`, because the Toolbox does not go through `processing.run()` and QGIS 4 has no post-execution hook. That channel holds no `QgsProcessingAlgorithm`, so it lifts no files and stamps no start time — the record held 2 jobs, **0 entities and 0 durations** on the one invocation path a person actually uses. `capture/hooks.py` now wraps both Toolbox execution branches and supplies the type map and a real `[started_at, ended_at]`. **Separately and importantly for §5.9:** QGIS 4 does not store the algorithm's parameters flat under `parameters` — it wraps them, `{"area_units": …, "inputs": {the real dict}}` — so the history channel's raw dict never digested equal to any other channel's and dedup could not fire. `parse_history_entry` now unwraps it. Free to change: the contract is not yet tagged `contract-v1`, same as the 18 Aug precedent below. | **Person B:** if you switch on `source`, add the fourth case — `toolbox` behaves like `post_hook`/`run_wrapper` (it carries `inputs`/`outputs`), not like `history_signal`. Nothing else in the event shape changed and no field was removed, so an existing mapper keeps working. |
 | 2026-08-19 | 1 (draft) | **The event dict itself is unchanged.** What changed is how §5.9's dedup key is computed from it: it was hashing `event["parameters"]` — the POST-SPLIT scalar dict — so the hook (which passes `parameter_definitions` and lifts layer params into `inputs`/`outputs`) and the history channel (which passes none and keeps them as scalars) produced different keys for one execution. Cross-channel dedup could therefore never fire. The key is now computed over the RAW pre-split parameter dict, and duplicates are matched against an activity's `[started_at, ended_at]` interval instead of a shared 100 ms bucket. `ProvenanceCaptureEngine.record_event` gained an optional keyword-only `raw_parameters`. | **Person B:** nothing to change — the event shape, its schema and every field are as before, and `record_event(event)` still works unchanged (§1.5). Worth knowing only because `activities.corroborations` was previously always 0 and now reflects reality. |
 | 2026-08-18 | 1 (draft) | **Both `OPEN:` items closed; status is now READY TO FREEZE.** Layer entries gain four raster fields — `band_count`, `pixel_size`, `width`, `height` — present on every entry and null where they do not apply. `format` is now canonicalised from the driver name. A source restricted to selected features records a `\|selectedFeaturesOnly=yes` suffix in `parameters`. | **Person B:** four new keys on every `inputs`/`outputs` entry — additive, so an existing mapper keeps working, but rasters now carry real metadata worth mapping. If you assert on `format` strings, `ESRI Shapefile` is now `Shapefile` and `GPKG` is now `GeoPackage`. Re-pull `tests/fixtures/mock_events.json`. Please confirm the `plugin_versions` decision above. |
 | 2026-08-18 | 1 (draft) | `source` gains `run_wrapper`. A3 installs the `processing.run` monkeypatch alongside the post-execution hook, so there are three channels, not two. Free to change now — the contract is not yet tagged `contract-v1`. | Person B: if you switch on `source`, add the third case. |

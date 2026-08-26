@@ -48,9 +48,10 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `plugin.py`, `ui/dock.py`, `lifecycle.py`, `paths.py`, `log.py`, `icon.png` — **A1**, written, not yet run in QGIS (see below).
 - `capture/normalizer.py` + `capture/engine.py` — **A3 core, complete and tested.** Both import zero QGIS (they duck-type), so the whole write path is verifiable here.
   **§5.9 dedup reworked 19 Aug 2026.** The key was hashed from the *post-split* `event["parameters"]`, which the channels do not produce alike, so cross-channel dedup could never fire: every job was written twice and `corroborations` was permanently 0. It is now keyed on the **raw pre-split** parameters and matched against an activity's `[started_at, ended_at]` interval (`DEDUP_MARGIN_S`) instead of a 100 ms bucket. No schema change. Full write-up in `docs/capture_coverage.md` §4.
-- `capture/hooks.py` — **A3/A5, QGIS-only, UNVERIFIED.** Pre- and post-execution hook installers + `processing.run` monkeypatch.
+- `capture/hooks.py` — **A3/A5, QGIS-only.** Pre- and post-execution hook installers + `processing.run` monkeypatch (both still UNVERIFIED — the hooks never fire on QGIS 4) + **`install_toolbox_wrapper`, the fourth channel, added 26 Aug 2026** because the Processing Toolbox goes through neither. It wraps both Toolbox execution branches, so a Toolbox run finally records its files and a real duration instead of just "a job happened". See `docs/capture_coverage.md` §4, 26 Aug.
 - `capture/history_observer.py` — **A5 complete.** `entryAdded` observer plus the `QTimer` polling fallback; the QGIS-facing halves are UNVERIFIED, the parsing and dedup are not.
 - `capture/environment.py` — **A6 hardened.** Agent probe, degrades outside QGIS. Records **every installed** plugin (`available_plugins`) as of 19 Aug 2026 — see the note below.
+- `plugin.py` project awareness — **26 Aug 2026.** `QgsProject.cleared` / `readProject` start a new session, so grouping and the counts dialog never span projects. Reuses `engine.begin_new_workflow()`; no schema change, and `plugin.py` stays the only layer that knows QGIS has projects. See `docs/capture_coverage.md` §4, 26 Aug.
 - `storage/workflows.py` — **A6 complete.** Session → workflow grouping: shared-path connected components, `sequence_order` by `started_at`, `suggest_name`, and a reconciliation that keeps a user-given name across a merge. 26 tests.
 - `plugin.py` menu — **A6**: "Start new workflow" and "Name this workflow…" registered through `_add_action`, so their teardown is registered with them. The dialogs themselves are UNVERIFIED.
 - `demos/review1.py` + `docs/demos/REVIEW-1.md` — **the Review 1 gate**, passing. Drives the real `handle_post_execution` path, no QGIS needed.
@@ -81,7 +82,7 @@ QGIS was installed on 24 August 2026 and the capture path has now executed insid
 | Which invocation paths fire the hook (§5.11 — RQ1 evidence) | **1 of 10 rows measured** (`processing.run()` from a script). The other nine need the desktop application driven by hand. |
 | Fixture `.shp` / `.gpkg` open in QGIS | **Verified** against QGIS 4.2.1 *and* GDAL 3.13.3. See `tests/fixtures/README.md`. |
 | `qgis.utils.available_plugins` exists and is what A6 assumes | **Verified** — the attribute exists. It reported 0 in a headless run, which is correct; a desktop count is still needed. |
-| The A6 menu dialogs ("Start new workflow", "Name this workflow…") | **Still open.** The plugin is deployed (`make deploy`); nobody has clicked them. |
+| The A6 menu dialogs ("Start new workflow", "Name this workflow…") | **Still open.** `make deploy` was **broken until 26 Aug 2026** — it linked into `QGIS3/profiles`, and QGIS 4 reads `QGIS4/profiles`, so the plugin was never visible in the Plugin Manager at all. Fixed, plus a missing `qgisMaximumVersion` that had QGIS filing the plugin as incompatible. Both verified against QGIS's own code; nobody has clicked the dialogs yet. See `docs/RUNNING_IN_QGIS.md`. |
 | — new — `QgsHistoryProviderRegistry` | Lives in `qgis.gui`, **not** `qgis.core`, on QGIS 4. `history_observer.py` already reaches it correctly via `QgsGui.historyProviderRegistry()`; do not "tidy" that import. Installed and tore down cleanly, but never fired on a script-driven run. |
 | — new — **PyQt6 would have stopped the plugin loading** | `Qt.RightDockWidgetArea` and `Qt.AlignTop` do not exist on Qt 6 (enums are scoped). `ui/dock.py` now uses `_qt_enum()` and `plugin.py` falls back to `QtGui` for `QAction` — feature detection per §2.5, working on both PyQt5 and PyQt6. |
 
@@ -91,7 +92,7 @@ The design compensates rather than hopes: `normalizer.py` and `engine.py` import
 
 **One caution carried forward from the A6 review (19 Aug 2026).** All three pre-existing §5.9 tests passed against the broken dedup, because each was built on the one shape where the defect is invisible, and the Review 2 demo asserted the claim too. When `docs/capture_coverage.md` §1 and §2 are filled in from a running QGIS, remember that a green suite was not evidence here.
 
-**Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but on QGIS 4 neither hook runs at all (above), so this stays unresolved rather than fixed. **Do not report `post_hook` durations in RQ2**; on the only QGIS measured so far there are no `post_hook` rows to report.
+**Known limitation from A3, addressed in A5:** the post-execution hook fires *after* a run, so unless QGIS leaves a start time in the namespace every job looks instantaneous. A5's pre-execution hook fixes it — but on QGIS 4 neither hook runs at all (above), so this stays unresolved rather than fixed. **Do not report `post_hook` durations in RQ2**; on the only QGIS measured so far there are no `post_hook` rows to report. **Nor `history_signal` durations** — it timestamps after the run, so `started_at == ended_at` on every row it writes (measured 26 Aug). Durations are trustworthy only from `run_wrapper` and the `toolbox` channel added 26 Aug, both of which bracket the call. Check `capture_channel` before using a duration.
 
 **Environment fingerprint changed in A6 (19 Aug 2026).** `environment.plugin_versions()` moved from `qgis.utils.active_plugins` (loaded) to `available_plugins` (installed), closing the `docs/CONTRACT_event.md` decision of 18 Aug. Agent rows written before and after describe the same machine but are not the same row — do not compare an RQ2 agent-row count naively across that date.
 
@@ -187,7 +188,10 @@ make test-capture    # capture suite — needs QGIS + pytest-qgis
 make schema-check    # apply schema.sql to a throwaway DB and report tables/indices
 make fixtures        # regenerate the fixtures B and C consume
 make demo1           # run the Review 1 demo
+make deploy && make qgis   # the plugin, in the desktop application
 ```
+
+**To run the plugin inside QGIS by hand — launching, ticking it on, what you should see, and how to fill in the open `docs/capture_coverage.md` §1 rows — follow [`docs/RUNNING_IN_QGIS.md`](./docs/RUNNING_IN_QGIS.md).**
 
 **Do not run `pytest tests/storage` directly.** `pytest-qgis` auto-loads and imports `qgis` before any conftest runs, so a bare invocation crashes on a machine without QGIS and hides §4.1 violations on a machine with it. `make test-storage` passes `-p no:pytest_qgis`. See `RULES.md` §6.1.1.
 
