@@ -371,9 +371,11 @@ def install_run_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]:
         except BaseException:
             # §5.2 [HARD] — record the failure, then re-raise UNTOUCHED. The
             # user's exception is theirs; we are only watching.
-            _record(engine, algOrName, parameters, None, started_at, "failed")
+            _observe(engine, algOrName, parameters, None, started_at, "failed",
+                     source="run_wrapper", context="processing.run wrapper")
             raise
-        _record(engine, algOrName, parameters, results, started_at, "completed")
+        _observe(engine, algOrName, parameters, results, started_at, "completed",
+                 source="run_wrapper", context="processing.run wrapper")
         return results
 
     wrapper._geoprovenance_wrapped = True  # noqa: SLF001 — our own marker
@@ -390,8 +392,36 @@ def install_run_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]:
     return restore
 
 
-def _record(engine, algorithm_or_id, parameters, results, started_at, status) -> None:
-    """Observe one run from the wrapper. Never raises (§5.1)."""
+def _observe(engine, algorithm_or_id, parameters, results, started_at, status,
+             *, source: str, context: str, branch: str | None = None) -> None:
+    """Record one observation from inside a running algorithm. NEVER raises.
+
+    ``_record`` guards its own body, but §5.1 [HARD] is about what reaches the
+    user, and everything on the way to it — resolving the algorithm, the
+    first-firing log line, `_record` being monkeypatched in a test — is on the
+    same call stack as somebody's analysis. One more guard here costs nothing
+    and is the difference between losing a record and aborting a run.
+    """
+    try:
+        if branch is not None:
+            _note_toolbox_branch(branch)
+        _record(engine, algorithm_or_id, parameters, results, started_at, status,
+                source=source, context=context)
+    except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+        try:
+            log_exception(context, exc)
+        except Exception:  # noqa: BLE001 — logging must not be the thing that raises
+            pass
+
+
+def _record(engine, algorithm_or_id, parameters, results, started_at, status,
+            *, source: str = "run_wrapper", context: str = "processing.run wrapper") -> None:
+    """Observe one run from a wrapper channel. Never raises (§5.1).
+
+    ``source`` is the §5.9 / §8.3 channel label that ends up in
+    ``activities.capture_channel``; ``context`` only names the caller in the log
+    when something is swallowed, so a failure says which channel produced it.
+    """
     try:
         algorithm = resolve_algorithm(algorithm_or_id)
         facts = _algorithm_facts(algorithm)
@@ -410,10 +440,178 @@ def _record(engine, algorithm_or_id, parameters, results, started_at, status) ->
             started_at=started_at,
             ended_at=utc_now_iso(),
             status=status,
-            source="run_wrapper",
+            source=source,
         )
     except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
-        log_exception("processing.run wrapper", exc)
+        log_exception(context, exc)
+
+
+# ---------------------------------------------------------------------------
+# channel 4: the Processing Toolbox dialog
+# ---------------------------------------------------------------------------
+#
+# Measured 26 Aug 2026, and the reason this channel exists: a Buffer and a
+# Convex hull run from the Toolbox were caught ONLY by `history_signal`. The
+# Toolbox does not go through `processing.run()`, so `run_wrapper` never fired,
+# and the post-execution hook does not exist on QGIS 4. The history channel has
+# no QgsProcessingAlgorithm in hand, so it lifts no files (§3.3) and records no
+# start time — the database held two jobs, zero entities and zero durations.
+#
+# That is the invocation path a person actually uses, so "we noticed it
+# happened" is not a good enough record. This channel sits where the Toolbox
+# really executes and hands the engine what the history channel cannot: the
+# algorithm object (hence the parameter type map, hence inputs/outputs) and a
+# start time taken BEFORE the run.
+#
+# QGIS 4.2.1's `AlgorithmWidget.runAlgorithm()` has TWO branches, chosen by the
+# algorithm's FlagNoThreading:
+#
+#     line 427   QgsProcessingAlgRunnerTask(alg, parameters, context, feedback)
+#     line 452   execute(alg, parameters, context, feedback)
+#
+# Both are patched, because which one runs is a property of the algorithm, not
+# of the Toolbox. Both are patched IN THE `algorithm_widget` NAMESPACE rather
+# than at their source: `AlgorithmExecutor.execute` is also called by
+# `Processing.runAlgorithm`, which is what `processing.run` already goes
+# through, and patching there would double-count every scripted run.
+
+TOOLBOX_SOURCE = "toolbox"
+
+#: Which branch actually fired, logged once per session. This is RQ1 evidence
+#: (§5.11) — the answer belongs in docs/capture_coverage.md §4.
+_toolbox_branches_seen: set = set()
+
+
+def _note_toolbox_branch(branch: str) -> None:
+    if branch in _toolbox_branches_seen:
+        return
+    _toolbox_branches_seen.add(branch)
+    log(f"Toolbox capture: first execution seen via the {branch} branch "
+        f"— record this in docs/capture_coverage.md §4", INFO)
+
+
+def install_toolbox_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]:
+    """Wrap both Toolbox execution branches. Returns the un-patch (§5.4).
+
+    Degrades to a no-op when Processing's GUI is not importable — a headless
+    QGIS has no Toolbox, and that is not an error.
+    """
+    try:
+        from processing.gui import algorithm_widget
+    except ImportError as exc:
+        log(f"Processing's Toolbox is not available, "
+            f"toolbox wrapper not installed: {exc}", WARNING)
+        return lambda: None
+
+    restores: list[Callable[[], None]] = []
+
+    _wrap_toolbox_task(engine, algorithm_widget, restores)
+    _wrap_toolbox_execute(engine, algorithm_widget, restores)
+
+    if not restores:
+        return lambda: None
+
+    log(f"Toolbox wrapper installed ({len(restores)} of 2 branches)", INFO)
+
+    def restore() -> None:
+        # Reverse order, same discipline as the CleanupStack (§5.4).
+        for undo in reversed(restores):
+            try:
+                undo()
+            except Exception as exc:  # noqa: BLE001 — §5.4: one failure must
+                log_exception("removing the Toolbox wrapper", exc)  # not strand the rest
+        log("Toolbox wrapper removed", INFO)
+
+    return restore
+
+
+def _wrap_toolbox_task(engine, algorithm_widget, restores: list) -> None:
+    """The threaded branch: QgsProcessingAlgRunnerTask.
+
+    The task is constructed before the run and emits ``executed(ok, results)``
+    after it, so the two ends of the bracket are a construction and a signal.
+    That is what gives this channel a real duration where the history channel
+    has none.
+    """
+    original = getattr(algorithm_widget, "QgsProcessingAlgRunnerTask", None)
+    if original is None:
+        log("QgsProcessingAlgRunnerTask not found in the Toolbox module — "
+            "threaded Toolbox runs will not be captured by this channel", WARNING)
+        return
+    if getattr(original, "_geoprovenance_wrapped", False):
+        log("the Toolbox task is already wrapped — not wrapping twice", WARNING)
+        return
+
+    def task_factory(algorithm, parameters=None, *args, **kwargs):
+        # §5.2 [HARD] — build the real task first and return it untouched. The
+        # dialog calls isCanceled() on it and connects its own slot; anything
+        # we hand back that is not the genuine article breaks the user's run.
+        task = original(algorithm, parameters, *args, **kwargs)
+        try:
+            started_at = utc_now_iso()
+
+            def on_executed(ok, results=None):
+                _observe(
+                    engine, algorithm, parameters,
+                    results if ok else None, started_at,
+                    "completed" if ok else "failed",
+                    source=TOOLBOX_SOURCE, context="Toolbox task wrapper",
+                    branch="threaded task",
+                )
+
+            task.executed.connect(on_executed)
+        except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+            log_exception("attaching to the Toolbox task", exc)
+        return task
+
+    task_factory._geoprovenance_wrapped = True  # noqa: SLF001 — our own marker
+    algorithm_widget.QgsProcessingAlgRunnerTask = task_factory
+
+    def restore() -> None:
+        algorithm_widget.QgsProcessingAlgRunnerTask = original
+
+    restores.append(restore)
+
+
+def _wrap_toolbox_execute(engine, algorithm_widget, restores: list) -> None:
+    """The synchronous branch: AlgorithmExecutor.execute, as imported here.
+
+    Taken by algorithms flagged FlagNoThreading, and by in-place edits.
+    """
+    original = getattr(algorithm_widget, "execute", None)
+    if not callable(original):
+        log("execute() not found in the Toolbox module — synchronous Toolbox "
+            "runs will not be captured by this channel", WARNING)
+        return
+    if getattr(original, "_geoprovenance_wrapped", False):
+        log("the Toolbox executor is already wrapped — not wrapping twice", WARNING)
+        return
+
+    @functools.wraps(original)
+    def wrapper(alg, parameters=None, *args, **kwargs):
+        started_at = utc_now_iso()
+        try:
+            ok, results = original(alg, parameters, *args, **kwargs)
+        except BaseException:
+            # §5.2 [HARD] — record it, then re-raise UNTOUCHED.
+            _observe(engine, alg, parameters, None, started_at, "failed",
+                     source=TOOLBOX_SOURCE, context="Toolbox execute wrapper",
+                     branch="synchronous execute")
+            raise
+        _observe(engine, alg, parameters, results if ok else None, started_at,
+                 "completed" if ok else "failed",
+                 source=TOOLBOX_SOURCE, context="Toolbox execute wrapper",
+                 branch="synchronous execute")
+        # §5.2 — the caller unpacks exactly this pair.
+        return ok, results
+
+    wrapper._geoprovenance_wrapped = True  # noqa: SLF001 — our own marker
+    algorithm_widget.execute = wrapper
+
+    def restore() -> None:
+        algorithm_widget.execute = original
+
+    restores.append(restore)
 
 
 # ---------------------------------------------------------------------------
@@ -432,4 +630,5 @@ def install_all(engine: ProvenanceCaptureEngine, hook_dir) -> list[tuple[str, Ca
         ("restore the pre-execution hook setting", install_pre_execution_hook(hook_dir)),
         ("restore the post-execution hook setting", install_post_execution_hook(hook_dir)),
         ("un-patch processing.run", install_run_wrapper(engine)),
+        ("un-patch the Processing Toolbox", install_toolbox_wrapper(engine)),
     ]

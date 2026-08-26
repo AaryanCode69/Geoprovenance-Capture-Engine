@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS activities (
     execution_log   TEXT,
 
     -- [+A0.1] RQ1 instrumentation, per RULES.md §5.9 / §8.3.
-    capture_channel TEXT,                    -- 'post_hook'|'run_wrapper'|'history_signal' — which won
+    capture_channel TEXT,                    -- 'post_hook'|'run_wrapper'|'history_signal'|'toolbox' — which won
     corroborations  INTEGER NOT NULL DEFAULT 0,  -- times the OTHER channel also saw this
     dedup_key       TEXT,                    -- (algorithm_id, params hash, started_at@100ms)
 

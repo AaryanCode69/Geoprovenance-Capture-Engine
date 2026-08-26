@@ -39,6 +39,13 @@ Not in A1 (deliberate seams)
     A6    "Start new workflow" / "Name this workflow" menu actions — landed
           in A6. Both are thin: the mechanism is the engine's session id and
           storage/workflows.py, and nothing about grouping is decided here.
+
+Project awareness (26 Aug 2026)
+    This is the ONLY layer that knows QGIS has projects. capture/ and storage/
+    stay project-agnostic — engine.py still imports no QGIS — because the
+    mechanism is one that already existed: a project change mints a new
+    session_id, and session_id is already the grouping key (Appendix B.5).
+    See _watch_project.
 """
 
 from __future__ import annotations
@@ -83,6 +90,13 @@ class GeoProvenancePlugin:
         #: this session. A6 groups activities into workflows by it.
         self.session_id = str(uuid.uuid4())
 
+        #: Every session id belonging to the CURRENT QGIS project. Usually one;
+        #: more when the user hits "Start new workflow" without changing
+        #: project. Reset when the project changes — that is what makes the
+        #: counts in _show_database_info mean "this project" rather than
+        #: "everything this profile has ever seen".
+        self._project_sessions: list[str] = [self.session_id]
+
         self.store: ProvenanceStore | None = None
         self.engine: ProvenanceCaptureEngine | None = None
         self.dock: GeoProvenanceDockWidget | None = None
@@ -96,6 +110,7 @@ class GeoProvenancePlugin:
         try:
             self._open_store()
             self._start_capture()
+            self._watch_project()
             self._build_dock()
             self._build_actions()
         except Exception as exc:  # noqa: BLE001 — §5.1
@@ -151,6 +166,106 @@ class GeoProvenancePlugin:
         # phrased in ("the hook caught 98%, the history channel the rest").
         for description, undo in history_observer.install_history_observer(self.engine):
             self._cleanup.defer(description, undo)
+
+    def _watch_project(self) -> None:
+        """A new or opened project starts a new record (26 Aug 2026).
+
+        Before this, nothing in the plugin knew QGIS had projects at all. One
+        database lives per PROFILE, the session id was minted once at load, and
+        so a fresh project kept accumulating into the previous one's workflows
+        and reported every job the profile had ever seen.
+
+        The mechanism is deliberately the one that already exists: a project
+        change mints a new ``session_id`` via engine.begin_new_workflow(), and
+        ``session_id`` is ALREADY the grouping key (Appendix B.5). So grouping
+        stops spanning projects for free — no schema change, no second idea for
+        the same thing (§3.4 would otherwise make this a breaking change to two
+        other people's work).
+
+        Nothing is deleted. The past stays on disk and simply stops being shown.
+        """
+        if self.engine is None:
+            return
+        try:
+            from qgis.core import QgsProject
+        except ImportError as exc:  # pragma: no cover — needs a non-QGIS process
+            log(f"cannot watch the project, QGIS is unavailable: {exc}", WARNING)
+            return
+
+        project = QgsProject.instance()
+
+        # QGIS CLEARS a project and then READS the new one, so opening a file
+        # fires both. _begin_project handles the double fire (see below).
+        for name in ("cleared", "readProject"):
+            signal = getattr(project, name, None)
+            if signal is None:
+                log(f"QgsProject has no {name!r} signal — project boundaries "
+                    f"will be missed on this QGIS", WARNING)
+                continue
+            handler = self._make_project_handler(name)
+            signal.connect(handler)
+            self._cleanup.defer(
+                f"disconnect QgsProject.{name}",
+                lambda s=signal, h=handler: s.disconnect(h),
+            )
+
+    def _make_project_handler(self, reason: str):
+        """One slot per signal, tolerant of whatever arguments it carries."""
+        def handler(*_args) -> None:
+            # §5.1 [HARD] — this runs inside QGIS's own project machinery.
+            try:
+                self._begin_project(reason)
+            except Exception as exc:  # noqa: BLE001
+                log_exception(f"handling QgsProject.{reason}", exc)
+        return handler
+
+    def _begin_project(self, reason: str) -> None:
+        """Start a fresh session for a new project, if one is warranted.
+
+        Skipped when the outgoing session recorded nothing. That makes the
+        clear-then-read double fire a single boundary instead of two, and stops
+        a plain QGIS launch from burning a session id before any work happens.
+        """
+        if self.engine is None or self.store is None:
+            return
+        if not self.store.list_activities_for_session(self.engine.session_id):
+            # Nothing to separate from. Still re-scope, in case a previous
+            # project's sessions are lingering in the list.
+            self._project_sessions = [self.engine.session_id]
+            return
+
+        self.session_id = self.engine.begin_new_workflow()
+        self._project_sessions = [self.session_id]
+        log(f"project changed ({reason}) — recording from here as a new piece "
+            f"of work (session {self.session_id})", INFO)
+
+    def _project_name(self) -> str:
+        """What to call the current project in a dialog a reviewer reads (§7.5)."""
+        try:
+            from qgis.core import QgsProject
+
+            file_name = QgsProject.instance().fileName()
+        except Exception:  # noqa: BLE001 — §5.1
+            return "unknown"
+        if not file_name:
+            return "not saved yet"
+        return os.path.basename(file_name)
+
+    def _project_counts(self) -> tuple[int, int]:
+        """(jobs, files) for the current project only.
+
+        Composed from store methods that already exist rather than a new one:
+        ProvenanceStore is the API Person B and Person C build against (§1.5),
+        and this needs nothing it does not already offer.
+        """
+        jobs = 0
+        files: set[str] = set()
+        for session_id in self._project_sessions:
+            jobs += len(self.store.list_activities_for_session(session_id))
+            for row in self.store.list_session_datasets(session_id):
+                if row["file_path"]:
+                    files.add(row["file_path"])
+        return jobs, len(files)
 
     def _build_dock(self) -> None:
         self.dock = GeoProvenanceDockWidget(self.iface.mainWindow())
@@ -231,6 +346,10 @@ class GeoProvenancePlugin:
 
         self.engine.begin_new_workflow()
         self.session_id = self.engine.session_id
+        # Same project, another piece of work — so this session is ADDED to the
+        # project's list rather than replacing it, and the counts below keep
+        # covering everything done in this project.
+        self._project_sessions.append(self.session_id)
         QMessageBox.information(
             self.iface.mainWindow(), PLUGIN_NAME,
             "Started a new piece of work.\n\nJobs from here on are recorded "
@@ -288,12 +407,21 @@ class GeoProvenancePlugin:
         a person can recognise, and this dialog is demo surface (§7.5).
         """
         members: dict[str, int] = {}
-        for row in self.store.list_session_workflow_members(self.engine.session_id):
-            members[row["workflow_id"]] = members.get(row["workflow_id"], 0) + 1
+        workflow_rows = []
+        seen_ids: set[str] = set()
+        # Every session in THIS project, not just the current one — otherwise
+        # "Start new workflow" hides the work done before it.
+        for session_id in self._project_sessions:
+            for row in self.store.list_session_workflow_members(session_id):
+                members[row["workflow_id"]] = members.get(row["workflow_id"], 0) + 1
+            for workflow in self.store.find_workflows_by_session(session_id):
+                if workflow["id"] not in seen_ids:
+                    seen_ids.add(workflow["id"])
+                    workflow_rows.append(workflow)
 
         choices: list[tuple[str, str]] = []
         seen: dict[str, int] = {}
-        for workflow in self.store.find_workflows_by_session(self.engine.session_id):
+        for workflow in workflow_rows:
             steps = members.get(workflow["id"], 0)
             plural = "" if steps == 1 else "s"
             label = f"{workflow['name']}  ({steps} job{plural})"
@@ -321,12 +449,23 @@ class GeoProvenancePlugin:
 
         counts = self.store.counts()
         watching = "yes" if self.engine is not None else "no — see the log"
+        jobs, files = self._project_counts()
+
+        # This project first, the whole computer second. Reporting only the
+        # total is what made a brand new project look like it had inherited
+        # four jobs from a project that was closed (26 Aug 2026); reporting
+        # only the project would make the rest look deleted, which it is not.
         QMessageBox.information(
             self.iface.mainWindow(), PLUGIN_NAME,
             f"Where the record is kept:\n{self.db_path}\n\n"
-            f"Watching for jobs: {watching}\n"
-            f"Jobs written down so far: {counts['activities']}\n"
-            f"Files being tracked: {counts['entities']}\n",
+            f"Project: {self._project_name()}\n"
+            f"Watching for jobs: {watching}\n\n"
+            f"In this project:\n"
+            f"    Jobs written down so far: {jobs}\n"
+            f"    Files being tracked: {files}\n\n"
+            f"Everything on this computer:\n"
+            f"    Jobs: {counts['activities']}    "
+            f"Files: {counts['entities']}\n",
         )
 
     # -- unload ------------------------------------------------------------

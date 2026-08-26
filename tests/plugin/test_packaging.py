@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import configparser
 import pathlib
+import re
 import struct
 import subprocess
 import sys
@@ -77,6 +78,71 @@ def test_minimum_qgis_version_matches_what_we_can_actually_test_on():
     parser = configparser.ConfigParser()
     parser.read(METADATA)
     assert parser["general"]["qgisMinimumVersion"] == "3.28"
+
+
+def test_the_maximum_qgis_version_is_declared_explicitly():
+    """Leaving qgisMaximumVersion out does NOT mean "no ceiling".
+
+    QGIS derives one, by taking the FIRST CHARACTER of the minimum and
+    appending ".99" (pyplugin_installer/installer_data.py:834). With
+    qgisMinimumVersion=3.28 that is "3" + ".99" = 3.99 — so on 26 Aug 2026 QGIS
+    4.2.1 marked this plugin `incompatible` and filed it under the Plugin
+    Manager's Invalid tab instead of Installed.
+
+    metadata.txt carries the full rationale. This asserts the line is there.
+    """
+    parser = configparser.ConfigParser()
+    parser.read(METADATA)
+    assert parser["general"].get("qgisMaximumVersion"), (
+        "metadata.txt must declare qgisMaximumVersion — QGIS derives a wrong "
+        "one from the minimum when it is absent. See metadata.txt."
+    )
+
+
+def _qgis_version_key(version: str) -> str:
+    """QGIS's own comparison key, from pyplugin_installer/version_compare.py.
+
+    Reimplemented rather than imported because this suite runs with no QGIS
+    (RULES.md §6.1). Missing components are padded the way QGIS pads them: a
+    minimum or current version gains "0", a maximum gains "99".
+    """
+    parts = re.sub(r"[^0-9.]+", "", version).split(".")
+    return "".join(f"{int(p):04d}" for p in parts)
+
+
+def _padded(version: str, *, maximum: bool = False) -> str:
+    parts = re.sub(r"[^0-9.]+", "", version).split(".")
+    while len(parts) < 3:
+        parts.append("99" if maximum else "0")
+    return _qgis_version_key(".".join(parts))
+
+
+def test_the_qgis_we_actually_tested_on_falls_inside_the_declared_window():
+    """The assertion that would have caught 26 Aug 2026 before a human did.
+
+    docs/capture_coverage.md records which QGIS every measurement in this
+    repository was taken on. If metadata.txt does not admit that QGIS, then the
+    plugin cannot load on the only build the findings come from — which is a
+    contradiction worth failing on, not discovering in a review room.
+    """
+    coverage = (REPO_ROOT / "docs" / "capture_coverage.md").read_text()
+    match = re.search(
+        r"QGIS version tested\*\*\s*\|\s*\*\*([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        coverage,
+    )
+    assert match, "docs/capture_coverage.md no longer states the QGIS version tested"
+    tested = match.group(1)
+
+    parser = configparser.ConfigParser()
+    parser.read(METADATA)
+    minimum = parser["general"]["qgisMinimumVersion"]
+    maximum = parser["general"]["qgisMaximumVersion"]
+
+    assert _padded(minimum) <= _padded(tested) <= _padded(maximum, maximum=True), (
+        f"metadata.txt declares QGIS {minimum} - {maximum}, but every "
+        f"measurement in docs/capture_coverage.md was taken on QGIS {tested}. "
+        f"QGIS would refuse to load this plugin there."
+    )
 
 
 def test_metadata_has_the_fields_qgis_requires():

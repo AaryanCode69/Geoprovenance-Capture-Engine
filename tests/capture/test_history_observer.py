@@ -13,6 +13,7 @@ is the most that can be checked without QGIS.
 from __future__ import annotations
 
 import datetime as dt
+import time
 
 import pytest
 
@@ -91,12 +92,60 @@ def test_a_qdatetime_like_object_is_converted():
     assert h.entry_timestamp(FakeQDateTime()) == WHEN
 
 
-def test_a_naive_datetime_is_assumed_utc_rather_than_dropped():
-    naive = dt.datetime(2026, 8, 8, 10, 14, 22, 481903)
-    assert h.entry_timestamp(naive) == WHEN
+@pytest.fixture()
+def india_time(monkeypatch):
+    """Run the body at UTC+05:30.
+
+    A naive timestamp is only mishandled where the local offset is not zero, so
+    a test that runs at whatever the machine happens to be set to proves
+    nothing. Pinning a real offset is what makes the assertions below fail
+    against the pre-fix code on ANY machine, including a UTC one.
+    """
+    monkeypatch.setenv("TZ", "Asia/Kolkata")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
-def test_an_iso_string_passes_through():
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="POSIX time.tzset only")
+def test_a_naive_datetime_is_local_and_gets_CONVERTED_not_relabelled(india_time):  # noqa: N802
+    """THE regression test — measured 26 Aug 2026, and the third appearance of
+    this failure mode.
+
+    QGIS hands over a naive LOCAL QDateTime. The old code did
+    ``moment.replace(tzinfo=utc)``, which relabels 21:40 IST as 21:40 UTC
+    instead of converting it to 16:10 UTC. Everything Person A writes uses
+    ``utc_now_iso()``, which is genuinely UTC, so the two channels disagreed by
+    the whole local offset: §5.9 matches inside a 2 second window, so every
+    Toolbox job seen by both channels was written TWICE and ``corroborations``
+    sat at 0 — which is exactly the number the RQ1 per-channel split reports.
+
+    The test this replaced asserted the broken behaviour and passed, because it
+    ran at UTC+0 where the bug cannot be seen. `capture_coverage.md` already
+    says it once: a green suite was not evidence.
+    """
+    naive = dt.datetime(2026, 8, 8, 15, 44, 22, 481903)   # 15:44 in Kolkata
+
+    assert h.entry_timestamp(naive) == "2026-08-08T10:14:22.481903+00:00"
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="POSIX time.tzset only")
+def test_a_naive_iso_string_is_converted_too(india_time):
+    """It used to pass straight through, carrying the identical skew into the
+    dedup key — the string path is not a safer path."""
+    assert h.entry_timestamp("2026-08-08T15:44:22.481903") == WHEN
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="POSIX time.tzset only")
+def test_a_timestamp_that_already_has_an_offset_keeps_its_instant(india_time):
+    """Only NAIVE values are ambiguous. One that states its offset is already
+    unambiguous and must not be shifted again."""
+    assert h.entry_timestamp("2026-08-08T15:44:22.481903+05:30") == WHEN
+    assert h.entry_timestamp(WHEN) == WHEN
+
+
+def test_an_iso_string_in_utc_passes_through():
     assert h.entry_timestamp(WHEN) == WHEN
 
 

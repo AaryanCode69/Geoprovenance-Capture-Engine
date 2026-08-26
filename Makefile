@@ -28,7 +28,7 @@ QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
                  --env=QT_QPA_PLATFORM=offscreen $(QGIS_APP)
 
 .PHONY: help venv test test-storage test-plugin test-capture test-qgis fixtures icon \
-        deploy undeploy qgis demo1 demo2 demo3 schema-check clean \
+        deploy undeploy where qgis demo1 demo2 demo3 schema-check clean \
         qgis-demo qgis-demo-inputs qgis-demo-record qgis-demo-run qgis-demo-layers \
         qgis-demo-project qgis-demo-verify qgis-demo-open qgis-demo-clean
 
@@ -41,7 +41,8 @@ help:
 	@echo "make venv          create .venv and install dev dependencies"
 	@echo ""
 	@echo "make deploy        symlink the plugin into the geoprov-dev QGIS profile"
-	@echo "make undeploy      remove that symlink"
+	@echo "make undeploy      remove that symlink (from every profile root)"
+	@echo "make where         which QGIS profile root will be used, and why"
 	@echo "make qgis          launch QGIS on the geoprov-dev profile"
 	@echo ""
 	@echo "make fixtures      regenerate the fixtures Person B and C consume (RULES.md §3.4)"
@@ -94,6 +95,13 @@ icon:
 
 deploy:
 	$(PY) tools/deploy.py link
+
+# The first thing to run when QGIS shows no plugin. QGIS keeps its profiles
+# under a directory named for its MAJOR version, so a QGIS 3 machine and a
+# QGIS 4 machine deploy to different trees (docs/capture_coverage.md §4,
+# 26 Aug 2026 — getting this wrong fails silently).
+where:
+	$(PY) tools/deploy.py where
 
 undeploy:
 	$(PY) tools/deploy.py unlink

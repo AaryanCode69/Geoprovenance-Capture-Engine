@@ -1,6 +1,7 @@
 [general]
 name=GeoProvenance
 qgisMinimumVersion=3.28
+qgisMaximumVersion=4.99
 description=Automatic W3C PROV-O provenance capture and reproducibility auditing for QGIS Processing workflows
 version=0.1.0
 author=Person A, Person B, Person C
@@ -35,3 +36,18 @@ deprecated=False
 #
 # Raise this back to 3.34 once a 3.34+ build is available. Findings recorded in
 # docs/capture_coverage.md against 3.28.9 do not transfer to 3.34 unverified.
+#
+# qgisMaximumVersion is declared EXPLICITLY and must stay that way. When it is
+# absent QGIS does not mean "no ceiling" — it derives one, by taking the FIRST
+# CHARACTER of the minimum and appending ".99":
+#
+#     pyplugin_installer/installer_data.py:834 (QGIS 4.2.1)
+#         qgisMaximumVersion = pluginMetadata("qgisMaximumVersion").strip()
+#         if not qgisMaximumVersion:
+#             qgisMaximumVersion = qgisMinimumVersion[0] + ".99"
+#
+# With qgisMinimumVersion=3.28 that is "3" + ".99" = 3.99, so QGIS 4.2.1 marked
+# this plugin `incompatible` — "Plugin designed for QGIS 3.28 - 3.99" — and put
+# it in the Plugin Manager's Invalid tab instead of the Installed one. Measured
+# 26 Aug 2026. The window below spans the 3.x LTS this project targets and the
+# 4.x build it is actually tested on.
