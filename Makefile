@@ -27,7 +27,7 @@ QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
                  --env=QGIS_PREFIX_PATH=/app \
                  --env=QT_QPA_PLATFORM=offscreen $(QGIS_APP)
 
-.PHONY: help venv test test-storage test-prov test-audit test-layout \
+.PHONY: help venv test test-storage test-prov test-fingerprint test-audit test-layout \
         test-plugin test-capture test-qgis fixtures icon demo-workflow \
         deploy undeploy where qgis demo1 demo2 demo3 schema-check clean \
         qgis-demo qgis-demo-inputs qgis-demo-record qgis-demo-run qgis-demo-layers \
@@ -37,6 +37,7 @@ help:
 	@echo "make test          EVERYTHING that runs without QGIS — the usual one"
 	@echo "make test-storage  storage suite only (RULES.md §6.1)"
 	@echo "make test-prov     Person B's PROV layer only    — no QGIS needed"
+	@echo "make test-fingerprint  Person B's fingerprint layer — no QGIS needed"
 	@echo "make test-audit    Person C's audit scorer only  — no QGIS needed"
 	@echo "make test-layout   Person C's family-tree layout — no QGIS needed"
 	@echo "make test-plugin   plugin-layer suite only"
@@ -86,6 +87,9 @@ test-storage:
 # storage suite: no QGIS, runs anywhere (RULES.md §6.1).
 test-prov:
 	$(PY) -m pytest tests/prov -q -p no:pytest_qgis
+
+test-fingerprint:
+	$(PY) -m pytest tests/fingerprint -q -p no:pytest_qgis
 
 test-audit:
 	$(PY) -m pytest tests/audit -q -p no:pytest_qgis

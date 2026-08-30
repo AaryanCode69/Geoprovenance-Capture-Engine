@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from .log import WARNING, log
+
 #: PROV-JSON needs qualified names. Nothing dereferences this; it exists so an
 #: external reader (ProvStore, PROV-Viewer) can tell our ids apart from its own.
 NAMESPACE = "https://github.com/AaryanCode69/GeoProvenance#"
@@ -305,7 +307,17 @@ def to_prov_json(graph: ProvGraph) -> dict[str, Any]:
 
     for relation in graph.relations:
         keys = _RELATION_KEYS.get(relation["relation_type"])
-        if keys is None:  # a relation type added to the schema but not here
+        if keys is None:
+            # A relation type the schema allows and this map does not cover.
+            # Skipping is right — inventing a PROV term for it would be worse
+            # than omitting it — but skipping SILENTLY is how a type added to
+            # schema.sql later disappears from the export with nothing to say
+            # so. The export is still valid; it is just no longer complete.
+            log(
+                f"no PROV term for relation type {relation['relation_type']!r}; "
+                "left out of the export",
+                WARNING,
+            )
             continue
         source_key, target_key = keys
         record = _without_nulls(

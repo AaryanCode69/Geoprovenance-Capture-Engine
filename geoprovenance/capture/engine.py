@@ -21,11 +21,24 @@ Rules implemented
     §4.10        Failed and cancelled runs are persisted, never dropped.
     §5.9         First channel wins; the second increments corroborations.
 
-Phase 2 seam
-    Person B's fingerprinter is called from here at two moments — inputs before
-    execution, outputs after (research doc §5.3). Run hashing on a background
-    thread or after the transaction commits so it never adds latency to the
-    user's run, and attribute its cost to B, not to A (§8.5).
+Person B's two passes (wired 30 Aug 2026)
+    After a job is recorded, this module fingerprints what the job touched and
+    then works out which file came from which. Both run AFTER the §4.3
+    transaction commits, never inside it: a fingerprint of a large raster takes
+    seconds, and holding that transaction open for it would block every other
+    writer for the duration.
+
+    This is ONE pass over everything touched, not research doc §5.3's two
+    moments (inputs before execution, outputs after). The consequence is worth
+    knowing: an input a job edits in place is recorded as it stands *after* the
+    edit, not before. Taken deliberately — PERSON_A.md Phase 2 permits either a
+    background thread or after-the-commit, and in-place edits are rare next to
+    the cost of holding the write lock. See the note at `_fingerprint`.
+
+    `enrich=False` turns both off. That is how §8.5's "attribute B's cost
+    separately" gets measured: both passes run synchronously on the calling
+    thread, so measure RQ2 with `enrich=False` as the baseline and report the
+    difference as Person B's cost.
 """
 
 from __future__ import annotations

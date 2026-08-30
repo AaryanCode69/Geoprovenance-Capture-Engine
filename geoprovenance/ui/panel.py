@@ -14,8 +14,16 @@ running Qt.
     Qt 5 and Qt 6 both. Enum members moved under their enum type in Qt 6 and the
     flat spelling was removed, which on QGIS 4 stops a plugin loading outright
     (CLAUDE.md records exactly that happening to `Qt.RightDockWidgetArea`).
-    `_qt_enum` in ui/dock.py already solves it; it is imported rather than
-    re-written, and every enum member below goes through it (RULES.md §2.5).
+    `_qt_enum` in ui/dock.py solves that for the dock, but it cannot be reused
+    here: it hardcodes `Qt` as the owner, and the members this file needs are
+    owned by other classes — `RenderHint` by QPainter, `DragMode` by
+    QGraphicsView. Asking `Qt` for either raises on both bindings. `_member`
+    below takes the owner as an argument for that reason, and every enum member
+    in this file goes through it (RULES.md §2.5).
+
+    The version that did import `_qt_enum` imported cleanly and threw only when
+    the panel was constructed, so an import-only check passed it straight
+    through. That is why tests/capture/test_panel.py builds the widget.
 
 Installs itself through the seam agreed at the A1 exit gate:
 

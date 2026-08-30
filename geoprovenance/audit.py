@@ -171,7 +171,7 @@ def _inputs_exist(statuses: list[tuple[str, str]]) -> tuple[bool | None, str]:
     Files with no path are not counted: a memory layer was never on disk, so its
     absence is not a missing input.
     """
-    on_disk = [s for s in statuses if s[0] != UNKNOWN or s[1]]
+    on_disk = [s for s in statuses if s[0] != UNKNOWN]
     gone = [why for status, why in statuses if status == MISSING]
     if gone:
         return False, "; ".join(gone)
