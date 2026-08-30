@@ -488,7 +488,16 @@ def build_workflow_3(store: ProvenanceStore, agent: str) -> list[dict]:
                                      label="urban_dissolved.gpkg",
                                      file_path="data/derived/urban_dissolved.gpkg",
                                      created_at=ts(305), **gpkg)
-        centroids = store.add_entity(entity_id=fid("w3/centroids"),
+        # "w3/centroided", not "w3/centroids": the step below is named
+        # "centroids" and derives its own id from fid(f"w3/{name}"), so the
+        # obvious key collides — one UUID naming both the job and the file it
+        # made. relations.source_id is polymorphic with no foreign key, so a
+        # collision makes the graph genuinely ambiguous rather than merely
+        # untidy: Person C's traversal cannot tell which end it is standing on,
+        # and get_workflow_graph() returns the same id in both `activities` and
+        # `entities`. Every sibling step already names its output distinctly
+        # ("w3/buffered/v1", "w3/dissolved"); this one did not.
+        centroids = store.add_entity(entity_id=fid("w3/centroided"),
                                      label="not_urban_centroids.shp",
                                      file_path="data/derived/not_urban_centroids.shp",
                                      created_at=ts(306), **shp)
