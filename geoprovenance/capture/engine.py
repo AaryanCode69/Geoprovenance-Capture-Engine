@@ -127,10 +127,17 @@ class ProvenanceCaptureEngine:
     _instance: "ProvenanceCaptureEngine | None" = None
     _instance_lock = threading.Lock()
 
-    def __init__(self, store: ProvenanceStore, session_id: str | None = None):
+    def __init__(self, store: ProvenanceStore, session_id: str | None = None,
+                 enrich: bool = True):
         self.store = store
         self.session_id = session_id or str(uuid.uuid4())
         self._agent_cache: dict[str, str] = {}
+        #: Person B's two after-the-fact passes: fingerprint what was touched,
+        #: and work out which file came from which. Both are switched off
+        #: together for an RQ2 baseline that measures Person A's write path
+        #: alone — §8.5 [HARD] requires B's cost to be attributed separately,
+        #: and the only way to do that honestly is to be able to run without it.
+        self.enrich = enrich
 
     # -- singleton ---------------------------------------------------------
     #
@@ -149,8 +156,9 @@ class ProvenanceCaptureEngine:
             cls._instance = engine
 
     @classmethod
-    def start(cls, store: ProvenanceStore, session_id: str | None = None):
-        engine = cls(store, session_id)
+    def start(cls, store: ProvenanceStore, session_id: str | None = None,
+              enrich: bool = True):
+        engine = cls(store, session_id, enrich=enrich)
         cls.set_instance(engine)
         return engine
 
@@ -315,8 +323,12 @@ class ProvenanceCaptureEngine:
                 dedup_key=key,
             )
 
+            touched: list[tuple[str, str]] = []  # (entity id, path) for B's pass
+
             for layer in event.get("inputs") or []:
                 entity_id = self._entity_for_input(layer)
+                if layer.get("path"):
+                    touched.append((entity_id, layer["path"]))
                 # Appendix B.2 gives exactly four roles, and `overlay` names
                 # the one QGIS parameter key it was coined for. Other
                 # second-input keys (INTERSECT, MASK_LAYER, ...) are recorded
@@ -332,6 +344,8 @@ class ProvenanceCaptureEngine:
 
             for layer in event.get("outputs") or []:
                 entity_id = self._entity_for_output(layer)
+                if layer.get("path"):
+                    touched.append((entity_id, layer["path"]))
                 self.store.add_relation(
                     relation_type="wasGeneratedBy", source_id=entity_id,
                     target_id=activity_id, role="output",
@@ -363,8 +377,76 @@ class ProvenanceCaptureEngine:
         # field: an event replayed from tests/fixtures (the Review 2 demo does
         # exactly that, §7.3) carries its own session id, and grouping the
         # engine's instead would silently group nothing.
-        self.group_session(event["session_id"])
+        workflow_ids = self.group_session(event["session_id"])
+
+        if self.enrich:
+            self._fingerprint(touched)
+            self._infer_derivations(workflow_ids)
+
         return CaptureResult(activity_id=activity_id, recorded=True)
+
+    # -- Person B's passes, run after the commit (§8.5) ---------------------
+    #
+    # Both are OWNED BY PERSON B; they live here because here is where the
+    # engine learns what was touched. Written by Person A under the explicit
+    # written override of RULES.md §1.2 requested on 30 Aug 2026.
+    #
+    # After the commit, never inside it. A fingerprint of a large raster takes
+    # seconds, and holding §4.3's transaction open for it would block every
+    # other writer for the duration.
+    #
+    # ponytail: synchronous, on the calling thread. PERSON_A.md Phase 2 permits
+    # either "a background thread OR after the transaction commits"; this is the
+    # second. It still adds its own duration to a run_wrapper call, so when RQ2
+    # is measured, measure it with enrich=False as the baseline and report the
+    # difference as Person B's cost (§8.5). Move to a worker thread if that
+    # difference turns out to matter to a user rather than only to the paper.
+
+    def _fingerprint(self, touched: list[tuple[str, str]]) -> None:
+        """Record what each file held at the moment the job ran.
+
+        Without this the audit has nothing to compare a file against later, so
+        "has this input changed?" is unanswerable for everything captured live —
+        it would only ever work on hand-built fixtures.
+        """
+        try:
+            from ..fingerprint import hash as hashing
+        except Exception as exc:  # noqa: BLE001 — §5.1
+            log_exception("fingerprinting unavailable", exc)
+            return
+
+        for entity_id, path in touched:
+            try:
+                if not hashing.can_fingerprint(path):
+                    continue
+                # Quietly, not as an error. A record can name a file this
+                # process cannot see — a relative path recorded elsewhere, a
+                # network drive that is not mounted, an output QGIS wrote and
+                # then removed. That is the audit's finding to report later, not
+                # a fault here, and logging it per job would bury the real ones.
+                if not os.path.exists(path):
+                    continue
+                self.store.add_fingerprints(
+                    entity_id=entity_id,
+                    fingerprints=hashing.fingerprint_dataset(path),
+                )
+            except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+                # One unreadable file must not cost us the other files, and
+                # must never reach the user's QGIS.
+                log_exception(f"could not fingerprint {path}", exc)
+
+    def _infer_derivations(self, workflow_ids: list[str]) -> None:
+        """Work out which file came from which (§5.12 — B's job, not A's grouping)."""
+        try:
+            from .. import prov
+        except Exception as exc:  # noqa: BLE001
+            log_exception("derivation inference unavailable", exc)
+            return
+        for workflow_id in workflow_ids:
+            try:
+                prov.write_derivations(self.store, workflow_id)
+            except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+                log_exception(f"could not link the files in {workflow_id}", exc)
 
     def _agent_row(self, agent: dict) -> tuple[str, str]:
         """§4.6 — one row per distinct environment. Returns (id, cache key).

@@ -167,10 +167,15 @@ def main() -> int:
 
     with demo.step("Checking every piece of the record landed"):
         counts = store.counts()
-        assert counts["activities"] == 1, counts
-        assert counts["entities"] == 2, counts      # the file read, the file made
-        assert counts["agents"] == 1, counts        # the computer it ran on
-        assert counts["relations"] == 3, counts     # read, made, ran-on
+        assert counts["activities"] == 1, "one job"
+        assert counts["entities"] == 2, "the file read and the file made"
+        assert counts["agents"] == 1, "the computer it ran on"
+        # Four, not three, since 30 Aug 2026: read, made, ran-on — and then
+        # "the second file came from the first", which the software now works
+        # out for itself rather than being told. That fourth one is what a
+        # family tree is drawn from (RULES.md §7.9 — the demo moves with the
+        # code).
+        assert counts["relations"] == 4, "read, made, ran-on, came-from"
 
     with demo.step("Reading it back in plain English"):
         job = _only_activity(store, engine)

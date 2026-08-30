@@ -33,6 +33,7 @@ pytest.importorskip("qgis.core", reason="needs QGIS; run with make test-capture"
 
 from geoprovenance import classFactory  # noqa: E402
 from geoprovenance.plugin import GeoProvenancePlugin  # noqa: E402
+from geoprovenance.storage.store import SCHEMA_VERSION  # noqa: E402
 from geoprovenance.ui.dock import DOCK_OBJECT_NAME  # noqa: E402
 
 pytestmark = pytest.mark.qgis
@@ -74,7 +75,10 @@ def test_each_session_gets_its_own_id(qgis_iface):
 def test_init_gui_opens_the_database(plugin):
     plugin.initGui()
     assert plugin.store is not None
-    assert plugin.store.schema_version() == 1
+    # Against the constant, never a literal. This said `== 1` from the A1
+    # commit until 30 Aug 2026 — four days after the schema went to 2 — because
+    # it only runs inside QGIS and nothing outside QGIS could see it go red.
+    assert plugin.store.schema_version() == SCHEMA_VERSION
     assert plugin.db_path.exists()
 
 

@@ -52,7 +52,13 @@ def run_buffer(engine, *, started_at=None, source="post_hook", status="completed
 
 def test_one_buffer_produces_the_A3_record_shape(engine, store):  # noqa: N802
     """PERSON_A.md §A3: one agents row, one activities row, two entities rows,
-    used + wasGeneratedBy relations."""
+    used + wasGeneratedBy relations.
+
+    Measured with Person B's after-the-commit pass switched off, because this is
+    the A3 deliverable and B's `wasDerivedFrom` is explicitly not part of it
+    (RULES.md §1.2, §5.12). The enriched shape is the next test.
+    """
+    engine.enrich = False
     result = run_buffer(engine)
     assert result.recorded
 
@@ -66,6 +72,42 @@ def test_one_buffer_produces_the_A3_record_shape(engine, store):  # noqa: N802
     assert {r["relation_type"] for r in relations} == {
         "used", "wasGeneratedBy", "wasAssociatedWith"
     }
+
+
+def test_the_engine_also_links_the_files_once_person_bs_pass_is_on(engine, store):
+    """The default. A captured job leaves the record ready to draw as a tree.
+
+    Person A's capture writes "this job read that file" and "this job made that
+    file"; the link a family tree is actually drawn from — "this file came from
+    that file" — is inferred afterwards (§5.12). Without it the picture has no
+    edges between files at all.
+    """
+    assert engine.enrich is True
+    result = run_buffer(engine)
+
+    relations = store.get_relations_for(result.activity_id, direction="both")
+    assert {r["relation_type"] for r in relations} == {
+        "used", "wasGeneratedBy", "wasAssociatedWith"
+    }
+    derived = [
+        r for r in store.get_relations_for(
+            [rel for rel in relations if rel["relation_type"] == "wasGeneratedBy"][0][
+                "source_id"
+            ]
+        )
+        if r["relation_type"] == "wasDerivedFrom"
+    ]
+    assert len(derived) == 1
+
+
+def test_replaying_the_same_job_does_not_double_the_links(engine, store):
+    """Person B's pass reruns over the whole session after every capture, so it
+    must be idempotent or a four-step workflow ends up with sixteen links."""
+    run_buffer(engine)
+    before = store.counts()["relations"]
+    run_buffer(engine, started_at="2026-08-08T11:00:00.000000+00:00")
+    after = store.counts()["relations"]
+    assert after - before == 4  # exactly one more job's worth, not a re-link
 
 
 def test_relation_directions_match_the_research_doc(engine, store):

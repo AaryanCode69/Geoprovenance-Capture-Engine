@@ -271,6 +271,7 @@ class GeoProvenancePlugin:
         self.dock = GeoProvenanceDockWidget(self.iface.mainWindow())
         self.iface.addDockWidget(DEFAULT_DOCK_AREA, self.dock)
         self.dock.hide()  # opt-in: do not steal screen space on first load
+        self._fill_dock()
 
         def remove_dock() -> None:
             self.iface.removeDockWidget(self.dock)
@@ -279,6 +280,24 @@ class GeoProvenancePlugin:
             self.dock = None
 
         self._cleanup.defer("remove the dock widget", remove_dock)
+
+    def _fill_dock(self) -> None:
+        """Install Person C's panel through the seam agreed at the A1 exit gate.
+
+        Kept separate from _build_dock, and separately guarded, because the two
+        fail differently and only one of them is Person A's. If the panel cannot
+        be built the dock still registers and still tears down cleanly, and the
+        placeholder in ui/dock.py says so — which is the §5.1 posture applied to
+        the read side: a broken view must not cost the user their capture.
+        """
+        if self.store is None:
+            return
+        try:
+            from .ui.panel import GeoProvenancePanel
+
+            self.dock.set_content(GeoProvenancePanel(self.store, self.dock))
+        except Exception as exc:  # noqa: BLE001 — §5.1
+            log_exception("GeoProvenance panel could not be built", exc)
 
     def _build_actions(self) -> None:
         icon = QIcon(_ICON_PATH)
