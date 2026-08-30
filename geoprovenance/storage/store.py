@@ -684,24 +684,121 @@ class ProvenanceStore:
         )
         return fingerprint_id
 
+    def add_fingerprints(
+        self,
+        *,
+        entity_id: str,
+        fingerprints: Iterable[Any],
+        computed_at: str | None = None,
+    ) -> list[str]:
+        """Write a whole set of measurements of one dataset at ONE instant.
+
+        Person B computes several complementary measurements of a file together
+        — a byte hash plus descriptions of its shape — and they are only
+        interpretable against each other. Written one at a time through
+        ``add_fingerprint`` each would default to its own timestamp, so a set
+        taken together would land looking like a sequence of separate
+        observations, and ``get_fingerprint_set`` would have to guess which
+        rows belonged to which reading.
+
+        One ``computed_at`` for the set is what makes
+        ``UNIQUE(entity_id, hash_strategy, computed_at)`` read the way
+        ``docs/CONTRACT_schema.md`` describes it: one fingerprint per dataset,
+        per method, per instant. Two measurements by the same method in one set
+        are a genuine duplicate and are still rejected.
+
+        ``fingerprints`` is any iterable of objects exposing
+        ``as_store_kwargs()`` (Person B's ``Fingerprint``) or of plain dicts of
+        keyword arguments — this layer stores, it does not import B's types.
+
+        The whole set lands or none of it does (§4.3).
+        """
+        stamp = computed_at or utc_now_iso()
+        written: list[str] = []
+        with self.transaction():
+            for item in fingerprints:
+                kwargs = (
+                    item.as_store_kwargs()
+                    if hasattr(item, "as_store_kwargs")
+                    else dict(item)
+                )
+                kwargs.pop("computed_at", None)
+                written.append(
+                    self.add_fingerprint(
+                        entity_id=entity_id, computed_at=stamp, **kwargs
+                    )
+                )
+        return written
+
     def get_fingerprints_for(self, entity_id: str) -> list[dict[str, Any]]:
         """Every fingerprint recorded for one dataset, oldest first."""
         return _rows_to_dicts(
             self._connection().execute(
-                "SELECT * FROM fingerprints WHERE entity_id = ? ORDER BY computed_at",
+                "SELECT * FROM fingerprints WHERE entity_id = ? "
+                "ORDER BY computed_at, hash_strategy",
                 (entity_id,),
             )
         )
 
-    def get_latest_fingerprint(self, entity_id: str) -> dict[str, Any] | None:
-        """The most recent fingerprint — Person C's "has this changed?" check."""
+    def get_latest_fingerprint(
+        self, entity_id: str, hash_strategy: str | None = None
+    ) -> dict[str, Any] | None:
+        """The most recent fingerprint — Person C's "has this changed?" check.
+
+        ``hash_strategy`` selects which measurement is meant. Pass ``'file'``
+        for the byte hash; leave it out only when any measurement will do.
+
+        Since schema v2 a dataset may carry several rows at one instant, one
+        per method, so ``ORDER BY computed_at DESC LIMIT 1`` alone no longer
+        identifies a row — with the timestamps equal, which method came back
+        was whichever SQLite happened to reach first. ``hash_strategy`` is the
+        tie-break as well as the filter, so the answer is at least stable
+        between two runs against the same database.
+
+        For "has this changed?", prefer ``get_fingerprint_set`` and
+        ``geoprovenance.fingerprint.compare_fingerprint_sets``: one measurement
+        on its own can only say same-or-different, which is the question the
+        complementary strategies exist to improve on.
+        """
+        if hash_strategy is None:
+            return _row_to_dict(
+                self._connection().execute(
+                    "SELECT * FROM fingerprints WHERE entity_id = ? "
+                    "ORDER BY computed_at DESC, hash_strategy ASC LIMIT 1",
+                    (entity_id,),
+                ).fetchone()
+            )
         return _row_to_dict(
             self._connection().execute(
-                "SELECT * FROM fingerprints WHERE entity_id = ? "
+                "SELECT * FROM fingerprints WHERE entity_id = ? AND hash_strategy = ? "
                 "ORDER BY computed_at DESC LIMIT 1",
-                (entity_id,),
+                (entity_id, hash_strategy),
             ).fetchone()
         )
+
+    def get_fingerprint_set(self, entity_id: str) -> dict[str, dict[str, Any]]:
+        """The newest row of EACH method for one dataset, keyed by method.
+
+        This is what ``compare_fingerprint_sets`` consumes: two of these, one
+        per version of a file, are what let an audit say "the bytes moved but
+        the data did not" instead of just "different".
+
+        Newest *per method* rather than "every row at the newest instant",
+        because the two are not the same thing and only this one is safe. A set
+        written through ``add_fingerprints`` does share an instant, but a
+        caller writing rows individually gets a timestamp each, and a method
+        added later legitimately has no row at the older instant at all —
+        under an instant-based rule every one of those cases silently drops
+        signals, and a dropped signal is what turns a real change into
+        "unchanged".
+        """
+        newest: dict[str, dict[str, Any]] = {}
+        for row in self.get_fingerprints_for(entity_id):
+            strategy = row.get("hash_strategy") or "file"
+            current = newest.get(strategy)
+            if current is None or row["computed_at"] >= current["computed_at"]:
+                newest[strategy] = row
+        return newest
 
     # -- relations (Person B writes these THROUGH here — §1.3) --------------
 

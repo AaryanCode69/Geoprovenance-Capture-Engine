@@ -662,3 +662,135 @@ def test_close_is_still_safe_to_call_twice(tmp_path):
     store = ProvenanceStore(tmp_path / "twice.db")
     store.close()
     store.close()
+
+
+# ===========================================================================
+# Fingerprint sets — several measurements of one file, read together
+# ===========================================================================
+
+def test_a_set_of_measurements_shares_one_instant(store):
+    """"One fingerprint per dataset, per method, per INSTANT" has to be true.
+
+    Written one at a time, each row defaults to its own timestamp, and a set
+    taken together lands looking like a sequence of separate observations.
+    `add_fingerprints` is what makes the phrase in docs/CONTRACT_schema.md
+    describe the data.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    store.add_fingerprints(
+        entity_id=entity,
+        fingerprints=[
+            {"hash_value": "a", "hash_strategy": "file"},
+            {"hash_value": "b", "hash_strategy": "structure"},
+            {"hash_value": "c", "hash_strategy": "geometry"},
+        ],
+    )
+    stamps = {row["computed_at"] for row in store.get_fingerprints_for(entity)}
+    assert len(stamps) == 1
+
+
+def test_a_set_lands_whole_or_not_at_all(store):
+    """§4.3 — a half-written set is worse than none.
+
+    Two measurements by the same method at one instant are a genuine duplicate
+    and are still rejected; when that happens the earlier rows of the same set
+    must not be left behind, or the next comparison reads a partial set as a
+    complete one.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.add_fingerprints(
+            entity_id=entity,
+            fingerprints=[
+                {"hash_value": "a", "hash_strategy": "file"},
+                {"hash_value": "b", "hash_strategy": "geometry"},
+                {"hash_value": "c", "hash_strategy": "file"},
+            ],
+        )
+    assert store.get_fingerprints_for(entity) == []
+
+
+def test_add_fingerprints_accepts_person_bs_objects_not_just_dicts(store):
+    """§1.3 — B computes and hands the result over; this layer stores it.
+
+    Duck-typed on `as_store_kwargs()` rather than imported, so `storage/` still
+    knows nothing about `geoprovenance.fingerprint` and §4.1 stays intact.
+    """
+    class FakeFingerprint:
+        def as_store_kwargs(self):
+            return {"hash_value": "abc", "hash_strategy": "geometry"}
+
+    entity = store.add_entity(file_path="/data/roads.shp")
+    store.add_fingerprints(entity_id=entity, fingerprints=[FakeFingerprint()])
+    assert store.get_latest_fingerprint(entity, "geometry")["hash_value"] == "abc"
+
+
+def test_latest_fingerprint_can_be_asked_for_one_method(store):
+    """docs/CONTRACT_schema.md tells Person C to filter by method. This is how.
+
+    Without it C's only options were to pull every row and filter in Python, or
+    to write SQL — which §1.3 forbids.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    store.add_fingerprints(
+        entity_id=entity,
+        fingerprints=[
+            {"hash_value": "bytes", "hash_strategy": "file"},
+            {"hash_value": "shape", "hash_strategy": "structure"},
+        ],
+    )
+    assert store.get_latest_fingerprint(entity, "file")["hash_value"] == "bytes"
+    assert store.get_latest_fingerprint(entity, "structure")["hash_value"] == "shape"
+    assert store.get_latest_fingerprint(entity, "nosuchmethod") is None
+
+
+def test_latest_fingerprint_without_a_method_is_at_least_deterministic(store):
+    """Since v2, several rows legitimately share one `computed_at`.
+
+    `ORDER BY computed_at DESC LIMIT 1` alone then no longer identifies a row —
+    which one came back was whichever SQLite reached first. Asking twice must
+    give the same answer, or Person C's audit is not reproducible against its
+    own database.
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    store.add_fingerprints(
+        entity_id=entity,
+        fingerprints=[
+            {"hash_value": "a", "hash_strategy": "structure"},
+            {"hash_value": "b", "hash_strategy": "file"},
+            {"hash_value": "c", "hash_strategy": "geometry"},
+        ],
+    )
+    first = store.get_latest_fingerprint(entity)
+    assert first == store.get_latest_fingerprint(entity)
+    assert first["hash_strategy"] == "file"
+
+
+def test_the_fingerprint_set_is_the_newest_of_each_method(store):
+    """Not "every row at the newest instant" — the two differ, and only this is safe.
+
+    A method measured later than the others, or added after the first reading,
+    has no row at the older instant. Under an instant-based rule those signals
+    silently vanish, and a dropped signal turns a real change into "unchanged".
+    """
+    entity = store.add_entity(file_path="/data/roads.shp")
+    store.add_fingerprint(entity_id=entity, hash_value="old-bytes",
+                          hash_strategy="file",
+                          computed_at="2026-08-08T10:00:00.000000+00:00")
+    store.add_fingerprint(entity_id=entity, hash_value="new-bytes",
+                          hash_strategy="file",
+                          computed_at="2026-08-09T10:00:00.000000+00:00")
+    store.add_fingerprint(entity_id=entity, hash_value="shape",
+                          hash_strategy="structure",
+                          computed_at="2026-08-08T10:00:00.000000+00:00")
+
+    signals = store.get_fingerprint_set(entity)
+    assert set(signals) == {"file", "structure"}
+    assert signals["file"]["hash_value"] == "new-bytes"
+    assert signals["structure"]["hash_value"] == "shape"
+
+
+def test_the_fingerprint_set_of_an_unmeasured_file_is_empty_not_an_error(store):
+    """A memory layer has no bytes to hash, and that is a finding, not a fault."""
+    entity = store.add_entity(file_path=None, layer_type="vector")
+    assert store.get_fingerprint_set(entity) == {}

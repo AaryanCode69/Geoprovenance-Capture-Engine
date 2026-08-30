@@ -64,9 +64,9 @@ Both are tagged `contract-v1` once agreed by all three people.
 1. **Entity identity** — one entity row per `(file_path, content version)`. A file rewritten with different content gets a **new** entity UUID.
 2. **Relation role vocabulary** — lowercase `input` / `output` / `overlay` / `parameter`. The original QGIS parameter key (e.g. `OVERLAY`) is preserved in its own column.
 3. **Indices** — mandatory on `relations(source_id)`, `relations(target_id)`, `relations(relation_type)`, `entities(file_path)`, `fingerprints(entity_id)`, `workflow_activities(workflow_id)`.
-4. **Timestamps** — microsecond-precision UTC ISO 8601 everywhere: `datetime.now(timezone.utc).isoformat()`. Required because `fingerprints` has `UNIQUE(entity_id, computed_at)` and second-resolution timestamps collide.
+4. **Timestamps** — microsecond-precision UTC ISO 8601 everywhere: `datetime.now(timezone.utc).isoformat()`. Necessary but not sufficient for `fingerprints`, which since schema v2 declares `UNIQUE(entity_id, hash_strategy, computed_at)` — see Appendix B.4.
 5. **Session grouping** — `activities.session_id TEXT`, a UUID minted once at plugin startup.
-6. **Versioning** — `PRAGMA user_version = 1` plus a working `migrations.py`.
+6. **Versioning** — `PRAGMA user_version` plus a working `migrations.py`. Currently **2**; see the `docs/CONTRACT_schema.md` changelog for what each bump changed.
 
 **§3.3** The event dict shape is exactly as specified in `PERSON_A.md` §A0.2. Three rules that must be stated explicitly in `docs/CONTRACT_event.md`, because B will hit all three:
 - Memory and temporary layers (`memory:`, `TEMPORARY_OUTPUT`, `/vsimem/`) have `path: None` but keep `layer_type`. **B must not attempt to hash them.**
@@ -390,7 +390,13 @@ Copy this reasoning into `docs/CONTRACT_schema.md`. Each decision exists because
 
 **B.3 — Indices.** C's graph traversal does repeated reverse lookups on `relations`. Without indices on `source_id`, `target_id`, `relation_type`, `entities(file_path)`, `fingerprints(entity_id)`, and `workflow_activities(workflow_id)`, Workflow C (15+ operations) is slow — and Person A's own RQ2 numbers look worse than the design deserves.
 
-**B.4 — Timestamp precision.** `fingerprints` declares `UNIQUE(entity_id, computed_at)`. B hashes input and output within the same second, so second-resolution timestamps collide and the second insert fails. **Decision: microsecond-precision UTC ISO 8601 everywhere**, `datetime.now(timezone.utc).isoformat()`.
+**B.4 — Timestamp precision.** **Decision: microsecond-precision UTC ISO 8601 everywhere**, `datetime.now(timezone.utc).isoformat()`.
+
+*Corrected 30 Aug 2026 — the original rationale here was wrong and is retracted.* It read: "`fingerprints` declares `UNIQUE(entity_id, computed_at)`. B hashes input and output within the same second, so second-resolution timestamps collide and the second insert fails." **That names a collision the constraint cannot produce** — an input and an output are different entities, so their rows differ on `entity_id` and never collide at any resolution.
+
+The real problem was the opposite one. The key ignored *which measurement a row was*, so several complementary measurements of one file — a byte hash and the descriptions of its shape that make it interpretable — were rejected as duplicates of each other. Whether they landed depended on whether the clock happened to tick between two writes, which is a platform detail: 13 of 30 same-file writes were rejected on Windows, where `datetime.now()` advances roughly once per millisecond.
+
+Schema v2 therefore declares `UNIQUE(entity_id, hash_strategy, computed_at)` — **one fingerprint per dataset, per method, per instant** — with `hash_strategy NOT NULL DEFAULT 'file'`, because SQLite counts every NULL in a `UNIQUE` as distinct and a nullable column in the key silently disables the duplicate check. Microsecond precision is still mandatory; it is just not sufficient on its own. Full rationale and the changelog entry are in `docs/CONTRACT_schema.md`.
 
 **B.5 — Session grouping.** §7.1 has a `workflows` table but nothing linking an activity to the QGIS session that produced it. **Decision: add `activities.session_id TEXT`**, a UUID minted at plugin startup. This is what makes automatic workflow grouping possible without asking the user to declare workflow boundaries.
 
