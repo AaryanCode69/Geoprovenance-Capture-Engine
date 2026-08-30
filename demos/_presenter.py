@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import datetime as _dt
 import pathlib
+import re
 import shutil
 import sys
 import textwrap
@@ -86,9 +87,18 @@ def lint(text: str) -> list[str]:
     The product's own name is exempt — "GeoProvenance" on the title line is not
     the jargon §7.5 is about, and flagging it would train us to ignore the
     warning.
+
+    Matched on WORD BOUNDARIES, not as substrings. A plain `in` test reported
+    "repo" inside "reported", "dag" inside any word containing it, and "wal"
+    inside "walk" — false alarms on ordinary English, which is the same thing
+    the GeoProvenance exemption above exists to prevent. Boundaries only ever
+    match less, so nothing that was caught before is missed now.
     """
     lowered = text.lower().replace("geoprovenance", "")
-    return sorted({word for word in BANNED_WORDS if word in lowered})
+    return sorted({
+        word for word in BANNED_WORDS
+        if re.search(rf"(?<!\w){re.escape(word)}(?!\w)", lowered)
+    })
 
 
 class Demo:
@@ -151,6 +161,18 @@ class Demo:
     def note(self, text: str) -> None:
         for line in textwrap.wrap(text, WIDTH - 4) or [""]:
             self._say(f"  {line}")
+
+    def block(self, text: str, indent: int = 4) -> None:
+        """Print something already laid out — a family tree, a report.
+
+        `note()` re-wraps to the column width, which mangles anything whose
+        indentation carries meaning. This keeps the lines as they were given and
+        only shifts them across.
+        """
+        self._say("")
+        for line in text.splitlines():
+            self._say((" " * indent + line).rstrip())
+        self._say("")
 
     def limitation(self, text: str) -> None:
         """RULES.md §7.10 [HARD] — every demo states at least one honest limit."""

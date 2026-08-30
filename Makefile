@@ -27,7 +27,8 @@ QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
                  --env=QGIS_PREFIX_PATH=/app \
                  --env=QT_QPA_PLATFORM=offscreen $(QGIS_APP)
 
-.PHONY: help venv test test-storage test-plugin test-capture test-qgis fixtures icon \
+.PHONY: help venv test test-storage test-prov test-audit test-layout \
+        test-plugin test-capture test-qgis fixtures icon demo-workflow \
         deploy undeploy where qgis demo1 demo2 demo3 schema-check clean \
         qgis-demo qgis-demo-inputs qgis-demo-record qgis-demo-run qgis-demo-layers \
         qgis-demo-project qgis-demo-verify qgis-demo-open qgis-demo-clean
@@ -35,6 +36,9 @@ QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
 help:
 	@echo "make test          EVERYTHING that runs without QGIS — the usual one"
 	@echo "make test-storage  storage suite only (RULES.md §6.1)"
+	@echo "make test-prov     Person B's PROV layer only    — no QGIS needed"
+	@echo "make test-audit    Person C's audit scorer only  — no QGIS needed"
+	@echo "make test-layout   Person C's family-tree layout — no QGIS needed"
 	@echo "make test-plugin   plugin-layer suite only"
 	@echo "make test-capture  capture suite only, minus the QGIS-marked tests"
 	@echo "make test-qgis     only the tests that need QGIS + pytest-qgis"
@@ -49,6 +53,7 @@ help:
 	@echo "make icon          regenerate geoprovenance/icon.png"
 	@echo "make schema-check  apply schema.sql to a throwaway database and report"
 	@echo "make demo1/2/3     run the Review 1 / Review 2 / Final demo"
+	@echo "make demo-workflow the family tree + score demo (no QGIS needed)"
 	@echo "make clean         remove caches, scratch dirs, and throwaway databases"
 	@echo ""
 	@echo "make qgis-demo         build the whole visual demo, end to end"
@@ -76,6 +81,17 @@ test:
 
 test-storage:
 	$(PY) -m pytest tests/storage -q -p no:pytest_qgis
+
+# Person B's PROV layer and Person C's scorer and layout. Same promise as the
+# storage suite: no QGIS, runs anywhere (RULES.md §6.1).
+test-prov:
+	$(PY) -m pytest tests/prov -q -p no:pytest_qgis
+
+test-audit:
+	$(PY) -m pytest tests/audit -q -p no:pytest_qgis
+
+test-layout:
+	$(PY) -m pytest tests/ui -q -p no:pytest_qgis
 
 test-plugin:
 	$(PY) -m pytest tests/plugin -q -p no:pytest_qgis
@@ -126,6 +142,10 @@ demo2:
 
 demo3:
 	$(PY) demos/final.py
+
+# Capture -> family tree -> score, end to end, with no QGIS anywhere.
+demo-workflow:
+	$(PY) demos/workflow.py
 
 clean:
 	rm -rf .pytest_cache demos/_scratch

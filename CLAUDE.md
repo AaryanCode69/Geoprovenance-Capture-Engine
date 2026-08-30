@@ -37,10 +37,11 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-**Built and passing — 317 tests, `make test`, no QGIS required:**
+**Built and passing — 478 tests, `make test`, no QGIS required:**
 
-- `storage/schema.sql` — 8 tables, 9 indices, `user_version = 1`. Draft, not yet `contract-v1`.
-- `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code.
+- `storage/schema.sql` — 8 tables, 9 indices, `user_version = 2`. Draft, not yet `contract-v1` (no tag exists; the file still says "change it freely until then").
+  **v2, 26 Aug 2026:** `fingerprints` UNIQUE became `(entity_id, hash_strategy, computed_at)` — *one fingerprint per file, per method, per instant* — with `hash_strategy NOT NULL DEFAULT 'file'`. The old key's stated rationale was wrong and is retracted in `docs/CONTRACT_schema.md` §"The fingerprints key" and in `RULES.md` Appendix B.4: an input and an output are different entities and never collide at any resolution. The real defect was that row identity depended on clock granularity — 13 rejections in 30 runs on Windows — and that complementary measurements of one file were rejected as duplicates of each other.
+- `storage/migrations.py` — version get/set, forward migrations, refuses a database newer than the code. `MIGRATIONS[2]` rebuilds the `fingerprints` table, because SQLite has no `ALTER TABLE … DROP CONSTRAINT`. **Tested end to end as of 30 Aug 2026** (`tests/storage/test_migrations.py`, 8 tests): a v1 database is reconstructed from its DDL, migrated, and checked for row preservation, `NULL` → `'file'` backfill, index recreation and scratch-table cleanup. Before that the only real migration in the project was verified by hand and never committed — and since the fixture was regenerated at v2, no v1 artefact remained to migrate, so the path would have rotted silently.
 - `storage/store.py` — **A2 complete.** `ProvenanceStore` with the full §4.5 method surface, `transaction()` with savepoint nesting, per-thread connections + write lock, WAL + foreign keys. `close()` closes **every** thread's connection, not just the caller's (fixed 19 Aug 2026 — it was leaking exactly the worker-thread connections §4.7 exists to create).
 - `tests/fixtures/` — **A0.3 complete.** `mock_provenance.db` (3 workflows, 16 jobs, 23 datasets, 70 relations), `mock_events.json`, `mock_ids.json`, real Shapefile + GeoPackage in `data/`, all regenerable via `make fixtures` and byte-deterministic *on one machine*. **B and C are unblocked** — see `tests/fixtures/README.md`.
   **The two SQLite files are reproducible by their contents, not by their bytes (measured 20 Aug 2026).** Header-blanking alone was claimed to make them byte-identical anywhere; it does not, and the claim is now retired. Building `sample_areas.gpkg` from one identical SQL script under two SQLite builds compiled with identical flags: 3.51.2 vs 3.53.4 differ only in the version stamp (bytes 92–99, which `build_fixtures.py` blanks), but **3.40.1 vs 3.53.4 differ in three further bytes at offset 7368 — stale data in the free space of the schema page** — and a library built without `SQLITE_SECURE_DELETE` differs in ~1000 bytes at the same version. Rows, schema text and root pages are identical in every case; only unused bytes differ. `VACUUM` and `VACUUM INTO` reproduce the residue rather than erasing it, so there is no canonical form to write. `_logical_content` compares contents instead, and now also withholds the one fingerprint row that would otherwise leak the GeoPackage's bytes into the database's content — the SHA-256 of `sample_areas.gpkg` is stored *inside* `mock_provenance.db`. Verified end-to-end against a GeoPackage genuinely written by 3.40.1: the whole fixture set compares clean, where before it failed and named the wrong file.
@@ -52,6 +53,9 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `capture/history_observer.py` — **A5 complete.** `entryAdded` observer plus the `QTimer` polling fallback; the QGIS-facing halves are UNVERIFIED, the parsing and dedup are not.
 - `capture/environment.py` — **A6 hardened.** Agent probe, degrades outside QGIS. Records **every installed** plugin (`available_plugins`) as of 19 Aug 2026 — see the note below.
 - `plugin.py` project awareness — **26 Aug 2026.** `QgsProject.cleared` / `readProject` start a new session, so grouping and the counts dialog never span projects. Reuses `engine.begin_new_workflow()`; no schema change, and `plugin.py` stays the only layer that knows QGIS has projects. See `docs/capture_coverage.md` §4, 26 Aug.
+- `fingerprint/` — **Person B's Layer 3.** Imports no QGIS *and no GDAL*; the §4.1 guard covers it as of 30 Aug 2026.
+  - `hash.py` — the §6.4 tiered fallback: `file` (streamed SHA-256) under 500 MB, `schema_sample` over. Unchanged in behaviour.
+  - `readers.py`, `compare.py` — **added 30 Aug 2026.** A byte hash answers same-or-different, and that answer is wrong in both directions in ways RQ3 counts. It says CHANGED for a GeoPackage re-saved by a different SQLite build (the `tests/fixtures/` note above measured exactly that drift, on exactly this file). It says UNCHANGED when a Shapefile's `.dbf` is edited, because `entities.file_path` points at the `.shp` and the values live beside it. `readers.py` reads a dataset's shape with `struct` and `sqlite3` — Shapefile header bbox, `.shx` count, `.dbf` field descriptors, `.prj`, and `gpkg_contents` / `PRAGMA table_info` — so `hash.py` can emit three complementary rows (`structure`, `geometry`, `attributes`) beside the primary one, and `compare.py` reads them together into `resaved` / `attributes_changed` / `geometry_changed` / `schema_changed` / `unchanged` / `changed` / `unknown`. **A signal missing on either side is `unavailable`, never agreement** — a GeoTIFF has no readable description and correctly degrades to the old binary answer. Both failure cases are pinned as named tests in `tests/fingerprint/test_compare.py`. Not wired into `capture/engine.py`: that seam (`engine.py:24-28`) requires hashing off the hot path and attributed to B, not A (§8.5), and carries its own RQ2 measurement obligation.
 - `storage/workflows.py` — **A6 complete.** Session → workflow grouping: shared-path connected components, `sequence_order` by `started_at`, `suggest_name`, and a reconciliation that keeps a user-given name across a merge. 26 tests.
 - `plugin.py` menu — **A6**: "Start new workflow" and "Name this workflow…" registered through `_add_action`, so their teardown is registered with them. The dialogs themselves are UNVERIFIED.
 - `demos/review1.py` + `docs/demos/REVIEW-1.md` — **the Review 1 gate**, passing. Drives the real `handle_post_execution` path, no QGIS needed.
@@ -59,6 +63,24 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `tools/deploy.py`, `tools/make_icon.py`, `make deploy` / `make qgis`.
 - `schemas/event.schema.json` — draft; fixture events and built events both validate.
 - `qgis_demo/` — **the visual demonstration, complete and verified in QGIS (24 Aug 2026).** `make qgis-demo` builds it end to end: three input datasets, four Processing steps run inside a real QGIS which captures them, the record exported to map layers, and a styled QGIS project with four layer groups plus a printable page. `make qgis-demo-open` opens it. Every layer verified to load, draw and land in the right place by `make qgis-demo-verify`. Stdlib only — hand-rolled GeoPackage and Shapefile writers, and extents derived by reading file headers, because the record stores no geometry and the schema is frozen. Walkthrough in `qgis_demo/README.md`. This is demo scaffolding, deliberately outside `geoprovenance/` (RULES.md §1.1).
+
+- `prov.py` — **Person B's PROV mapper, added 30 Aug 2026.** `ProvGraph` over what `get_workflow_graph()` already returns (no second copy of the row shapes — the "Entity/Activity/Agent classes" README asks for are those dicts), `infer_derivations` / `write_derivations`, and both exports. Derivation is the **full output x input cross-product**: research doc §7.3's example lists only the primary chain and is wrong — a clip's result depends on the overlay too, and the committed fixture writes both. `to_prov_json` emits real PROV-JSON (top-level `entity`/`activity`/`used`/…) with **lowercase** `role`; §7.3's `"OVERLAY"` would be refused by the CHECK constraint on the table it came from. Idempotent, so it is safe to re-run after every capture.
+- `audit.py` — **Person C's 5-component scorer, added 30 Aug 2026.** research doc §4.3 Layer 5 weights unchanged. Two decisions §4.3 leaves open are made here and marked as judgements: score bands (HIGH >= 85, MODERATE >= 60), and **a check that could not be run stores NULL, never 100** — the overall score is the weighted mean over the checks that ran, and the report says which did not. Scoring an unrun check as a pass would report perfect reproducibility for every workflow audited outside QGIS. Per-file `verified/changed/missing/unknown` is computed once and reused for the panel's colours, so a ten-step chain reads each file once. `resaved` scores as unchanged (`CONTRACT_schema.md`, 30 Aug).
+- `ui/layout.py` — **Person C's arrangement, added 30 Aug 2026.** No Qt, no QGIS: ranks by longest-path relaxation, deterministic columns, and `as_text()` for the printed family tree. Splitting this from the widget is what puts the branching case under `make test` and what lets the demo print the same tree the panel draws.
+- `ui/panel.py` — **Person C's panel, added 30 Aug 2026, verified in QGIS 4.2.1.** Workflow picker, `QGraphicsScene` tree (files as rectangles, jobs as circles, dashed derivation edges), audit tab. Installed via `dock.set_content()` from `plugin.py:_fill_dock`, separately guarded so a broken view never costs the user their capture.
+  **Do not use `dock._qt_enum` here.** It hardcodes `Qt` as the owner; `RenderHint` belongs to `QPainter` and `DragMode` to `QGraphicsView`, and asking `Qt` for either raises on both bindings. `panel._member(owner, enum, name)` takes the owner. The Qt-only version **imported cleanly and threw when the panel was constructed** — an import check passed it straight through, which is why `tests/capture/test_panel.py` builds the widget rather than importing it.
+- `capture/engine.py` — **B's two passes wired in, 30 Aug 2026**, after the commit, never inside the §4.3 transaction: fingerprint what was touched, then infer the derivations. `ProvenanceCaptureEngine(..., enrich=False)` turns both off, which is how §8.5's "attribute B's cost separately" gets measured. A captured job now leaves **four** relations, not three; `demos/review1.py` was updated in the same change (§7.9).
+- `demos/workflow.py` + `docs/demos/WORKFLOW.md` — **the workflow-section demo**, passing (`make demo-workflow`, 7/7, byte-identical run to run, no QGIS). Capture -> derivation -> family tree -> score 100, then one starting file is edited behind the software's back and the score falls to 89 **naming the file**. Deliberately **not** one of the three §7 gates: the Final gate's claim ends "and here is what it costs", and the RQ1/RQ2 numbers do not exist yet.
+
+**Two defects found in the committed fixtures on 30 Aug 2026, one fixed, one pinned.**
+- **Fixed — an id was doing two jobs.** `fid("w3/centroids")` named both the `native:centroids` activity and the `not_urban_centroids.shp` entity it produced. `relations.source_id` is polymorphic with no FK, so which table an id lives in *is* its type: `get_workflow_graph()` returned that id in both `activities` and `entities`, and the workflow drew a self-loop. The output is now `w3/centroided`; `make fixtures` re-run, `mock_ids.json` key renamed, written up in `tests/fixtures/README.md` for B and C (§3.4 step 5). Found by the layout test asserting a file sits one row below the job that made it.
+- **Pinned, not fixed — `w1` is missing a derivation.** "Buffer then Clip" is research doc §7.3 transcribed literally (`build_fixtures.py:262-263`), including its omission of `final_roads.shp <- city_boundary.shp`, so the fixture asserts that editing the boundary could not affect the clip result. The other two workflows loop over every input. `tests/prov/test_prov.py` pins it as `{"Buffer then Clip": 1}` rather than regenerating, because silently changing an artefact B and C build against is the drift §3.4 calls the most expensive failure mode. One-line fix beside `build_fixtures.py:263`.
+
+**Two more, outside the fixtures.**
+- `demos/_presenter.lint` matched banned words as **substrings**, so "reported" tripped `repo` and "walk" tripped `wal`. Now word-boundary matched — strictly less sensitive, so nothing previously caught is missed. A false alarm on ordinary English is exactly what the "GeoProvenance" exemption beside it exists to prevent.
+- `tests/capture/test_plugin_lifecycle.py` asserted `schema_version() == 1` from the A1 commit until 30 Aug — four days after the schema went to 2 — because it only runs inside QGIS and nothing outside could see it go red. Now asserts against `SCHEMA_VERSION`. `make test-qgis` is 17/17.
+
+> **Ownership override, 30 Aug 2026.** Everything above marked *Person B* or *Person C* was written by Person A under an explicit written override of `RULES.md` §1.2 [HARD] and `CLAUDE.md` §2, requested by the user so the workflow section could be demonstrated. Every such module carries an owner header naming the override. **The override has not been extended:** §1.2 still governs, and new B/C work needs the same explicit request. Nothing here touched Person A's frozen surface — no schema change, no migration, no `store.py` signature change — so §3.4 never fired.
 
 **Stubs only** (docstring + rules): `demos/final.py`.
 
@@ -111,12 +133,20 @@ geoprovenance/              # the QGIS plugin package
   log.py                    # QGIS message log, with a stdlib fallback
   ui/
     dock.py                 # GeoProvenanceDockWidget — the shell Person C fills
+    layout.py               # Person C — where every node sits (no Qt, no QGIS)
+    panel.py                # Person C — the drawing. The only half needing Qt
   capture/
     engine.py               # ProvenanceCaptureEngine singleton
     hooks.py                # post-execution hook installer + processing.run wrapper
     history_observer.py     # entryAdded signal + QTimer polling fallback
     normalizer.py           # dedup, parameter flattening, CRS, path resolution
     environment.py          # QGIS/OS/Python/plugin versions
+  fingerprint/              # Person B's Layer 3 — no QGIS, no GDAL
+    hash.py                 # SHA-256 + the §6.4 tiered fallback + the 3 complements
+    readers.py              # a dataset's shape, read off disk with struct + sqlite3
+    compare.py              # two fingerprint sets -> what actually changed (RQ3)
+  prov.py                   # Person B — graph, wasDerivedFrom, PROV-JSON (no QGIS)
+  audit.py                  # Person C — the 5-component score + reports (no QGIS)
   storage/
     schema.sql              # §7.1 DDL + indices
     migrations.py           # PRAGMA user_version
@@ -129,11 +159,12 @@ docs/
   capture_coverage.md       # empirical: what fires the hook, what doesn't
   demos/
     TEMPLATE.md             # the plain-English demo template
-    REVIEW-1.md  REVIEW-2.md  FINAL.md
+    REVIEW-1.md  REVIEW-2.md  FINAL.md  WORKFLOW.md
 
 demos/
   _presenter.py             # shared plain-English output helpers
   review1.py  review2.py  final.py
+  workflow.py               # the workflow section: tree + score (not a §7 gate)
 
 schemas/event.schema.json   # JSON Schema for the event dict
 
@@ -150,7 +181,11 @@ tests/
     data/                   # small real .shp / .gpkg files
   storage/                  # MUST run with zero QGIS imports
   plugin/                   # MUST run with zero QGIS imports
-  capture/                  # runs under pytest-qgis
+  fingerprint/              # MUST run with zero QGIS imports
+  prov/                     # MUST run with zero QGIS imports
+  audit/                    # MUST run with zero QGIS imports
+  ui/                       # MUST run with zero QGIS *and zero Qt* imports
+  capture/                  # runs under pytest-qgis (the panel is checked here)
 
 qgis_demo/                  # the visual demonstration — NOT plugin code (§1.1)
   scenario.py               # the workflow, defined once; read by all three drivers
@@ -184,10 +219,14 @@ Common commands:
 make help            # list every command
 make venv            # create .venv, install dev deps, print the Python version to check
 make test-storage    # storage suite — no QGIS needed, runs anywhere
+make test-prov       # Person B's PROV layer  — no QGIS needed
+make test-audit      # Person C's audit score — no QGIS needed
+make test-layout     # Person C's family-tree arrangement — no QGIS needed
 make test-capture    # capture suite — needs QGIS + pytest-qgis
 make schema-check    # apply schema.sql to a throwaway DB and report tables/indices
 make fixtures        # regenerate the fixtures B and C consume
 make demo1           # run the Review 1 demo
+make demo-workflow   # family tree + score, end to end, no QGIS
 make deploy && make qgis   # the plugin, in the desktop application
 ```
 
