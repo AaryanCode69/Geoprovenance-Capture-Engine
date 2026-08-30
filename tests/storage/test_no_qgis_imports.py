@@ -52,10 +52,31 @@ print("OK")
 #: paths.py is deliberately absent: it imports QGIS by design (§4.8), which is
 #: the whole reason the default database location lives there and not in
 #: storage/.
+#: geoprovenance/fingerprint/ makes the same promise in its own docstrings —
+#: "a fingerprint needs a file path and nothing else", standard library only —
+#: and nothing asserted it either. It reads Shapefile headers with `struct` and
+#: GeoPackages with `sqlite3` precisely so that it does not need GDAL or QGIS;
+#: one convenience import of `qgis.core` to get a layer's field list would undo
+#: that, and the failure would surface as a broken `make test` on Person B's
+#: machine rather than here.
+#: geoprovenance.prov, geoprovenance.audit and geoprovenance.ui.layout are
+#: Person B's and Person C's layers, and they make the same promise for the same
+#: reason: the arithmetic of a derivation, a score and a picture's arrangement
+#: needs no QGIS, so all three are checkable in `make test` and printable by a
+#: demo in a room with no QGIS (§7.3). ui/panel.py is deliberately NOT here — it
+#: is the drawing, which is Qt by definition, and splitting it from ui/layout.py
+#: is what makes that split enforceable rather than merely intended.
 EXTRA_NO_QGIS_MODULES = (
+    "geoprovenance.prov",
+    "geoprovenance.audit",
+    "geoprovenance.ui.layout",
     "geoprovenance.capture.normalizer",
     "geoprovenance.capture.engine",
     "geoprovenance.capture.history_observer",
+    "geoprovenance.fingerprint",
+    "geoprovenance.fingerprint.hash",
+    "geoprovenance.fingerprint.readers",
+    "geoprovenance.fingerprint.compare",
     "geoprovenance.lifecycle",
     "geoprovenance.log",
 )
