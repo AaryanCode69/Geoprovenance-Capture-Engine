@@ -261,6 +261,24 @@ def build_workflow_1(store: ProvenanceStore, agent: str) -> list[dict]:
                  target_id=clip_run, role="output", qgis_param_key="OUTPUT"),
             dict(relation_type="wasDerivedFrom", source_id=buffered, target_id=roads),
             dict(relation_type="wasDerivedFrom", source_id=final, target_id=buffered),
+            # The one place this fixture departs from research doc §7.3, and
+            # deliberately. §7.3 lists `final_roads.shp <- buffered_roads.shp`
+            # and stops, omitting the boundary the clip was cut against — so
+            # transcribed literally, the fixture asserts that editing
+            # city_boundary.shp could not affect the result. It plainly could:
+            # the clip reads it (the `overlay` row four lines above), and a
+            # different boundary gives a different answer. That is exactly the
+            # claim audit.py's input_unchanged check exists to make, so a
+            # fixture asserting the opposite trains the checker on a lie.
+            #
+            # w2 and w3 cannot make this mistake because they loop over every
+            # input (:416-423, :525-537). This one is a hand-written tuple, and
+            # a hand-written tuple is the shape that can silently omit a row.
+            # Kept flat rather than refactored into that loop: _relation mints
+            # ids as uuid5 over (type, source, target, role), so adding a row
+            # changes no existing id, whereas reordering would churn the
+            # committed database for no gain.
+            dict(relation_type="wasDerivedFrom", source_id=final, target_id=boundary),
             dict(relation_type="wasAssociatedWith", source_id=buffer_run,
                  target_id=agent),
             dict(relation_type="wasAssociatedWith", source_id=clip_run, target_id=agent),

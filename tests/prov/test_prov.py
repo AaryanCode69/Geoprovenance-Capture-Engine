@@ -129,26 +129,27 @@ def test_writing_derivations_persists_them_and_is_idempotent(store, buffer_clip)
 
 
 def test_it_agrees_with_the_record_the_fixtures_already_hold(recorded_store):
-    """The strongest evidence available, and it found a defect in the fixture.
+    """The strongest evidence available: it agrees with all three, and it did not.
 
-    `tests/fixtures/mock_provenance.db` carries 19 "this file came from that
-    file" links written by `build_fixtures.py` months before this module
-    existed, so agreeing with it is evidence rather than a restatement of the
-    code under test. Two of its three pieces of work agree exactly.
+    `tests/fixtures/mock_provenance.db` carries its "this file came from that
+    file" links from `build_fixtures.py`, written months before this module
+    existed, so agreeing with them is evidence rather than a restatement of the
+    code under test. Two of the three pieces of work agreed on the first run.
 
-    The third does not, and the fixture is the one that is wrong.
-    "Buffer then Clip" is the research doc §7.3 example transcribed literally
-    (build_fixtures.py:262-263), and §7.3 records `final_roads.shp` as coming
-    from `buffered_roads.shp` while omitting the `city_boundary.shp` it was
-    clipped against — so the fixture asserts that editing the boundary could
-    not affect the result. It plainly could. The other two workflows in the
-    same file build their links by looping over every input
-    (build_fixtures.py:416-423, 525-528), which is this rule.
+    The third did not, and the fixture was the one that was wrong. "Buffer then
+    Clip" was research doc §7.3 transcribed literally, and §7.3 records
+    `final_roads.shp` as coming from `buffered_roads.shp` while omitting the
+    `city_boundary.shp` it was clipped against — so the fixture asserted that
+    editing the boundary could not affect the result. It plainly could. The
+    other two workflows build their links by looping over every input
+    (build_fixtures.py:416-423, :525-537), which is this rule.
 
-    Pinned rather than fixed: regenerating a fixture Person B and Person C
-    build against, without telling them, is the silent contract drift RULES.md
-    §3.4 calls the most expensive failure mode. The one-line fix is a third
-    `wasDerivedFrom` beside build_fixtures.py:263, then `make fixtures`.
+    Fixed 31 Aug 2026 rather than left pinned: a shared fixture that asserts
+    something false trains every consumer of it on that falsehood, and this
+    particular falsehood is the exact claim audit.py's input_unchanged check
+    exists to make. Told to B and C per RULES.md §3.4 step 5 —
+    tests/fixtures/README.md. Zero here now means the inference and the
+    recorded record agree everywhere, with nothing left over on either side.
     """
     missing = {
         workflow["name"]: prov.write_derivations(recorded_store, workflow["id"])
@@ -157,8 +158,25 @@ def test_it_agrees_with_the_record_the_fixtures_already_hold(recorded_store):
     assert missing == {
         "Points analysis (branching)": 0,
         "Sentinel-2 NDVI land cover": 0,
-        "Buffer then Clip": 1,
+        "Buffer then Clip": 0,
     }
+
+
+def test_the_clip_result_comes_from_the_boundary_too(recorded_store, ids):
+    """The defect above, pinned in the committed fixture so it cannot return.
+
+    Distinct from the hand-built case earlier in this file: that one proves
+    `infer_derivations` computes the cross-product, this one proves the shared
+    artefact B and C build against actually *contains* it. The omission was
+    invisible for months precisely because nothing read the fixture back and
+    asked.
+    """
+    graph = prov.ProvGraph.load(recorded_store, ids["w1"])
+    sources = {
+        graph.entity(e["id"])["label"]
+        for e in graph.derived_from(ids["w1/final_roads"])
+    }
+    assert sources == {"buffered_roads.shp", "city_boundary.shp"}
 
 
 def test_a_job_that_read_nothing_derives_nothing(store):

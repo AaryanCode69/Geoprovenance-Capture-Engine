@@ -7,6 +7,7 @@ RULES.md §6.1 — nothing in this directory may import QGIS. Run it with:
 
 from __future__ import annotations
 
+import json
 import pathlib
 import shutil
 
@@ -39,3 +40,9 @@ def recorded_store(tmp_path):
     s = ProvenanceStore(copy)
     yield s
     s.close()
+
+
+@pytest.fixture(scope="module")
+def ids() -> dict[str, str]:
+    """readable name -> UUID, the same map B and C read (fixtures/README.md)."""
+    return json.loads((FIXTURES / "mock_ids.json").read_text())
