@@ -542,3 +542,180 @@ def test_as_store_kwargs_does_not_carry_a_timestamp():
         hash_value="deadbeef", hash_strategy=STRATEGY_FILE, file_size_bytes=1
     )
     assert "computed_at" not in result.as_store_kwargs()
+
+
+# ===========================================================================
+# fingerprint_dataset — the primary measurement plus what can be read
+# ===========================================================================
+
+def test_a_dataset_yields_the_byte_hash_and_the_signals_that_explain_it():
+    """Four rows for a Shapefile, one per method, all distinct.
+
+    The `fingerprints UNIQUE(entity_id, hash_strategy, computed_at)` key was
+    widened in schema v2 precisely so a set like this can land at one instant.
+    Before this function nothing produced one, so the widened key permitted
+    something nothing wrote.
+    """
+    from geoprovenance.fingerprint import (
+        STRATEGY_ATTRIBUTES,
+        STRATEGY_GEOMETRY,
+        STRATEGY_STRUCTURE,
+        fingerprint_dataset,
+    )
+
+    results = fingerprint_dataset(DATA / "sample_points.shp")
+    strategies = [f.hash_strategy for f in results]
+    assert strategies[0] == STRATEGY_FILE, "the primary measurement comes first"
+    assert set(strategies) == {
+        STRATEGY_FILE,
+        STRATEGY_STRUCTURE,
+        STRATEGY_GEOMETRY,
+        STRATEGY_ATTRIBUTES,
+    }
+    assert len(strategies) == len(set(strategies)), "one row per method"
+
+
+def test_the_byte_hash_in_the_set_is_the_same_one_as_before():
+    """`fingerprint_dataset` adds rows; it does not change the one that existed.
+
+    If the `file` value moved, every fingerprint already in a database would
+    stop comparing equal to a freshly computed one, and the first audit after
+    an upgrade would report every input as changed.
+    """
+    from geoprovenance.fingerprint import fingerprint_dataset
+
+    alone = fingerprint_file(DATA / "sample_points.shp")
+    in_set = fingerprint_dataset(DATA / "sample_points.shp")[0]
+    assert in_set.hash_value == alone.hash_value
+    assert in_set.hash_strategy == alone.hash_strategy
+    assert in_set.file_size_bytes == alone.file_size_bytes
+
+
+def test_every_strategy_produced_is_one_of_the_known_ones():
+    """The column has no CHECK constraint, so this is where a typo is caught.
+
+    Constraining `hash_strategy` in SQL would mean a schema migration every
+    time a strategy is added; the constants are the single definition instead,
+    and this asserts nothing escapes them.
+    """
+    from geoprovenance.fingerprint import KNOWN_STRATEGIES, fingerprint_dataset
+
+    for path in (DATA / "sample_points.shp", DATA / "sample_areas.gpkg"):
+        for result in fingerprint_dataset(path):
+            assert result.hash_strategy in KNOWN_STRATEGIES
+
+
+def test_a_format_that_cannot_be_read_still_gets_its_byte_hash(tmp_path):
+    """GeoTIFF degrades to exactly today's answer, and says so by omission.
+
+    An absent signal is reported as unavailable by `compare`, never as
+    agreement — so the audit falls back to same-or-different rather than
+    inferring a re-save from checks that were never run.
+    """
+    from geoprovenance.fingerprint import fingerprint_dataset
+
+    raster = tmp_path / "elevation.tif"
+    raster.write_bytes(b"II*\x00" + b"\x00" * 64)
+    results = fingerprint_dataset(raster)
+    assert [f.hash_strategy for f in results] == [STRATEGY_FILE]
+
+
+def test_complementary_signals_never_raise_on_a_file_they_cannot_read(tmp_path):
+    """RULES.md §5.1 — this runs inside a user's processing run.
+
+    A truncated, corrupt or half-written file must produce no signals rather
+    than an exception, because the alternative is capture code taking down
+    somebody's analysis.
+    """
+    from geoprovenance.fingerprint import complementary_fingerprints
+
+    broken = tmp_path / "truncated.shp"
+    broken.write_bytes(b"\x00\x00\x27\x0a")
+    assert complementary_fingerprints(broken) == []
+
+    missing = tmp_path / "gone.gpkg"
+    assert complementary_fingerprints(missing) == []
+
+
+def test_a_large_file_can_now_describe_itself_instead_of_refusing(tmp_path):
+    """Closes the gap `fingerprint_file`'s own docstring names.
+
+    Over the §6.4 threshold the fallback needs a description, and the capture
+    event has nowhere to put `field_names` — so before this the fallback could
+    only ever see a feature count, and with nothing supplied at all it refused.
+    Reading the file supplies both.
+    """
+    from geoprovenance.fingerprint import fingerprint_dataset
+
+    for suffix in (".shp", ".shx", ".dbf", ".prj"):
+        (tmp_path / f"points{suffix}").write_bytes(
+            (DATA / f"sample_points{suffix}").read_bytes()
+        )
+    shapefile = tmp_path / "points.shp"
+
+    with pytest.raises(FingerprintError):
+        fingerprint_file(shapefile, threshold_bytes=0)
+
+    results = fingerprint_dataset(shapefile, threshold_bytes=0)
+    assert results[0].hash_strategy == STRATEGY_SCHEMA_SAMPLE
+    assert results[0].feature_count == 8
+
+
+def test_the_whole_set_stores_together_under_the_v2_key(tmp_path):
+    """The end-to-end reason schema v2 exists, exercised through the real store."""
+    from geoprovenance.fingerprint import fingerprint_dataset
+    from geoprovenance.storage.store import ProvenanceStore
+
+    store = ProvenanceStore(tmp_path / "prov.db")
+    try:
+        entity = store.add_entity(
+            entity_type="dataset", file_path=str(DATA / "sample_points.shp")
+        )
+        written = store.add_fingerprints(
+            entity_id=entity,
+            fingerprints=fingerprint_dataset(DATA / "sample_points.shp"),
+        )
+        assert len(written) == 4
+        assert set(store.get_fingerprint_set(entity)) == {
+            "file", "structure", "geometry", "attributes"
+        }
+    finally:
+        store.close()
+
+
+def test_structure_and_geometry_claim_no_byte_coverage():
+    """They are digests of a description, not of a byte range.
+
+    Recording a `file_size_bytes` against them would imply they had read that
+    many bytes of the file, which is exactly the overstatement `hash_strategy`
+    exists to prevent.
+    """
+    from geoprovenance.fingerprint import fingerprint_dataset
+
+    by_strategy = {
+        f.hash_strategy: f for f in fingerprint_dataset(DATA / "sample_points.shp")
+    }
+    assert by_strategy["structure"].file_size_bytes is None
+    assert by_strategy["geometry"].file_size_bytes is None
+    assert by_strategy["file"].file_size_bytes == 324
+    assert by_strategy["attributes"].file_size_bytes == 330
+
+
+def test_the_digest_recipe_travels_inside_the_hash():
+    """If what goes into a digest ever changes, old values must stop matching.
+
+    A version kept beside the hash could be ignored by a caller comparing two
+    hex strings, and a changed recipe would then read as a changed file. Same
+    reasoning as `_schema_sample_digest`'s "algorithm" key.
+    """
+    from geoprovenance.fingerprint.hash import (
+        STRUCTURE_ALGORITHM,
+        _json_digest,
+        _stream_digest,
+    )
+
+    payload = {"format": "Shapefile", "layers": []}
+    assert _json_digest(STRUCTURE_ALGORITHM, payload) != _json_digest(
+        "geoprovenance/structure/2", payload
+    )
+    assert _stream_digest("a", [b"x"])[0] != _stream_digest("b", [b"x"])[0]

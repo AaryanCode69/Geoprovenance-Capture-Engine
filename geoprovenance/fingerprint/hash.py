@@ -2,11 +2,13 @@
 
 Owner: Person B.  Research doc §4.3 Layer 3, §6.4.
 
-    RULES.md §2.2 — standard library only. `hashlib` and `pathlib`, nothing else.
+    RULES.md §2.2 — standard library only: `hashlib`, `json`, `pathlib`, plus
+    this package's own `readers`, which is standard library too.
     RULES.md §1.3 — this module computes; it never writes. The caller hands the
     result to `ProvenanceStore.add_fingerprint()`.
 
-Two strategies, chosen by file size (research doc §6.4):
+Two PRIMARY strategies, chosen by file size (research doc §6.4). Exactly one
+of these is produced for a dataset:
 
     file            SHA-256 over every byte. Exact: any change to the file is
                     detected. The default, and what every dataset under the
@@ -20,6 +22,44 @@ Two strategies, chosen by file size (research doc §6.4):
                     audit can report the weaker guarantee rather than imply
                     the stronger one.
 
+Three COMPLEMENTARY strategies, produced alongside the primary one whenever
+`readers.describe()` can read the file. These are not weaker substitutes for
+the byte hash; they answer a different question, and the answer only exists
+when they are compared against it:
+
+    structure       the field names, field types and CRS. Survives a re-save;
+                    moves when a column is added, renamed, retyped or reordered.
+    geometry        the feature count and bounding box. Survives a re-save;
+                    moves when features are added, removed or relocated.
+    attributes      the attribute values themselves — for a Shapefile the .dbf,
+                    which the byte hash of the .shp never touches. Survives a
+                    re-save; moves when one value in one row is edited.
+
+Why the complementary strategies exist at all
+    A byte hash gives a same/different answer, and it is wrong in both
+    directions often enough to matter to RQ3 (research doc §9.1, detection
+    accuracy = correctly detected changes / total changes).
+
+    Wrong as a FALSE POSITIVE: a GeoPackage re-saved by a different SQLite
+    build has different bytes and identical data — measured in this repository
+    at bytes 92-99 and offset 7368 across builds, with rows and schema text
+    unchanged. A byte hash that moved while structure, geometry and attributes
+    all held is a re-save, and `compare.py` says so.
+
+    Wrong as a FALSE NEGATIVE: a Shapefile is four files and the record points
+    at the .shp, so editing a name in the .dbf changes nothing the byte hash
+    reads. The `attributes` signal is the one that sees it.
+
+    §6.4 lists "feature-count + schema hash" only as a fallback for files over
+    the threshold, where it is strictly weaker than hashing the bytes. Run
+    ALONGSIDE the byte hash instead of instead of it, the same measurement
+    stops being a weaker answer and becomes a second axis.
+
+The three are separate rows rather than one combined digest because a combined
+digest would move whenever anything moved, which is the binary answer again.
+`fingerprints UNIQUE(entity_id, hash_strategy, computed_at)` is what lets them
+land together (docs/CONTRACT_schema.md, decision 4, v2).
+
 Why the threshold is a parameter and not a constant read at call time: RQ3
 measures change-detection accuracy, and an experiment that cannot vary the
 threshold cannot show where the fallback starts costing accuracy.
@@ -31,7 +71,9 @@ import hashlib
 import json
 import pathlib
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
+
+from . import readers
 
 #: Written into `fingerprints.hash_algorithm`. The column defaults to this too.
 HASH_ALGORITHM = "SHA-256"
@@ -40,8 +82,27 @@ HASH_ALGORITHM = "SHA-256"
 LARGE_FILE_THRESHOLD_BYTES = 500 * 1024 * 1024
 
 #: `fingerprints.hash_strategy` values. Person A's schema column, B's vocabulary.
+#:
+#: The column has no CHECK constraint, deliberately: constraining it would mean
+#: a schema migration every time a strategy is added, and these constants are
+#: the single place the vocabulary is defined. `KNOWN_STRATEGIES` is what the
+#: tests assert against instead, so a typo still fails somewhere.
 STRATEGY_FILE = "file"
 STRATEGY_SCHEMA_SAMPLE = "schema_sample"
+STRATEGY_STRUCTURE = "structure"
+STRATEGY_GEOMETRY = "geometry"
+STRATEGY_ATTRIBUTES = "attributes"
+
+#: Exactly one of these is produced per dataset.
+PRIMARY_STRATEGIES = frozenset({STRATEGY_FILE, STRATEGY_SCHEMA_SAMPLE})
+
+#: Produced in addition, when the file can be read. Each may be absent, and an
+#: absent signal compares as "unknown" rather than as "unchanged" (`compare.py`).
+COMPLEMENTARY_STRATEGIES = frozenset(
+    {STRATEGY_STRUCTURE, STRATEGY_GEOMETRY, STRATEGY_ATTRIBUTES}
+)
+
+KNOWN_STRATEGIES = PRIMARY_STRATEGIES | COMPLEMENTARY_STRATEGIES
 
 #: Read size for the streaming hash. 1 MiB keeps a 1 GB raster off the heap
 #: while staying far above the syscall overhead of a smaller buffer.
@@ -256,4 +317,176 @@ def fingerprint_file(
         hash_strategy=STRATEGY_SCHEMA_SAMPLE,
         file_size_bytes=size,
         feature_count=feature_count,
+    )
+
+
+# --------------------------------------------------------------------------
+# Complementary signals
+# --------------------------------------------------------------------------
+
+
+def _json_digest(algorithm: str, payload: dict[str, Any]) -> str:
+    """Digest a description, with the algorithm name travelling inside the hash.
+
+    The name is part of the hashed payload rather than a column beside it for
+    the reason `_schema_sample_digest` already gives: if what goes into a
+    digest ever changes, every old value must stop comparing equal to every new
+    one. A version that sat outside the hash could be ignored by a caller
+    comparing two hex strings, and a changed recipe would then read as a
+    changed file.
+
+    Sorted keys and explicit separators so the digest depends on the values and
+    not on dict ordering or json's default spacing.
+    """
+    body = dict(payload)
+    body["algorithm"] = algorithm
+    return hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _stream_digest(algorithm: str, chunks: Iterable[bytes]) -> tuple[str, int]:
+    """Digest a stream of bytes, prefixed by the algorithm name. Returns `(hex, bytes)`.
+
+    Streamed rather than joined because the attribute table of a large
+    Shapefile is a file in its own right, and this runs inside a user's
+    processing run (RULES.md §5.1).
+    """
+    digest = hashlib.sha256()
+    digest.update(algorithm.encode("utf-8") + b"\x00")
+    total = 0
+    for chunk in chunks:
+        digest.update(chunk)
+        total += len(chunk)
+    return digest.hexdigest(), total
+
+
+#: Version tags for the three complementary digests. Bump one and every value
+#: it ever produced stops comparing equal — which is correct, and is why the
+#: tag is inside the payload.
+STRUCTURE_ALGORITHM = "geoprovenance/structure/1"
+GEOMETRY_ALGORITHM = "geoprovenance/geometry/1"
+ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/1"
+
+
+def _total_feature_count(description: readers.DatasetDescription) -> int | None:
+    counts = [
+        layer.feature_count
+        for layer in description.layers
+        if layer.feature_count is not None
+    ]
+    return sum(counts) if counts else None
+
+
+def complementary_fingerprints(
+    path: str | pathlib.Path,
+    *,
+    description: readers.DatasetDescription | None = None,
+    max_attribute_rows: int = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
+) -> list[Fingerprint]:
+    """The signals that make a byte hash interpretable. Never raises.
+
+    Returns an empty list when the file is a format `readers` cannot read — a
+    GeoTIFF, say. That is not a failure: an absent signal compares as `unknown`
+    rather than as `unchanged`, so the audit degrades to today's same/different
+    answer and says that it has, instead of inventing an axis it cannot measure.
+
+    `file_size_bytes` is set only where a number of bytes was actually read.
+    `structure` and `geometry` are digests of a description, not of a byte
+    range, and recording a size against them would imply a coverage they do
+    not have.
+    """
+    description = description if description is not None else readers.describe(path)
+    if description is None:
+        return []
+
+    feature_count = _total_feature_count(description)
+    results = [
+        Fingerprint(
+            hash_value=_json_digest(
+                STRUCTURE_ALGORITHM, description.structure_payload()
+            ),
+            hash_strategy=STRATEGY_STRUCTURE,
+            file_size_bytes=None,
+            feature_count=feature_count,
+        ),
+        Fingerprint(
+            hash_value=_json_digest(
+                GEOMETRY_ALGORITHM, description.geometry_payload()
+            ),
+            hash_strategy=STRATEGY_GEOMETRY,
+            file_size_bytes=None,
+            feature_count=feature_count,
+        ),
+    ]
+
+    chunks = readers.attribute_chunks(path, max_rows=max_attribute_rows)
+    if chunks is not None:
+        digest, read_bytes = _stream_digest(ATTRIBUTES_ALGORITHM, chunks)
+        results.append(
+            Fingerprint(
+                hash_value=digest,
+                hash_strategy=STRATEGY_ATTRIBUTES,
+                file_size_bytes=read_bytes,
+                feature_count=feature_count,
+            )
+        )
+    return results
+
+
+def fingerprint_dataset(
+    path: str | pathlib.Path,
+    *,
+    feature_count: int | None = None,
+    field_names: Sequence[str] | None = None,
+    band_count: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    pixel_size: Sequence[float] | None = None,
+    threshold_bytes: int = LARGE_FILE_THRESHOLD_BYTES,
+    max_attribute_rows: int = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
+) -> list[Fingerprint]:
+    """Every fingerprint for one dataset: the primary one, plus what can be read.
+
+    This is what a caller should use. `fingerprint_file` remains exactly as it
+    was — one strategy, one result — because it is Person B's published entry
+    point and RULES.md §1.5 makes its signature an interface; this is a second
+    door, not a change to that one.
+
+    The result is ordered primary-first and every `hash_strategy` in it is
+    distinct, so the whole list can be written in one transaction under
+    `fingerprints UNIQUE(entity_id, hash_strategy, computed_at)` — which is the
+    constraint the v2 schema change widened to permit exactly this.
+
+    Values read off disk fill in for values the caller did not supply. That
+    closes a gap `fingerprint_file` still carries in its docstring: the capture
+    event has nowhere to put `field_names`, so before this the §6.4 fallback
+    could only ever see a feature count. A dataset over the threshold whose
+    file can be read now gets a real schema digest instead of refusing.
+
+    Raises `FingerprintError` only where `fingerprint_file` would: an
+    unhashable path, an unreadable file, or a file over the threshold that
+    nothing — neither the caller nor the reader — can describe.
+    """
+    description = readers.describe(path)
+
+    if description is not None:
+        first = description.layers[0] if description.layers else None
+        if feature_count is None:
+            feature_count = _total_feature_count(description)
+        if field_names is None and first is not None:
+            field_names = first.field_names
+
+    primary = fingerprint_file(
+        path,
+        feature_count=feature_count,
+        field_names=field_names,
+        band_count=band_count,
+        width=width,
+        height=height,
+        pixel_size=pixel_size,
+        threshold_bytes=threshold_bytes,
+    )
+    return [primary] + complementary_fingerprints(
+        path, description=description, max_attribute_rows=max_attribute_rows
     )
