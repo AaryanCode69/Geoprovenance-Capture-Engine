@@ -39,7 +39,8 @@ from qgis.core import (                                       # noqa: E402
     QgsFillSymbol, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsLineSymbol,
     QgsLayoutExporter, QgsLayoutItemLabel, QgsLayoutItemLegend, QgsLayoutItemMap,
     QgsLayoutItemScaleBar, QgsLayoutPoint, QgsLayoutSize, QgsMarkerSymbol,
-    QgsPalLayerSettings, QgsPrintLayout, QgsProject, QgsRectangle,
+    QgsPalLayerSettings, QgsPrintLayout, QgsProject, QgsRasterLayer,
+    QgsRectangle,
     QgsReferencedRectangle, QgsRendererCategory, QgsSingleSymbolRenderer,
     QgsTextFormat, QgsUnitTypes, QgsVectorLayer, QgsVectorLayerSimpleLabeling,
 )
@@ -83,6 +84,48 @@ def _load_file(path: pathlib.Path, title: str) -> QgsVectorLayer | None:
     if not layer.isValid():
         print(f"  note: QGIS could not open {path.name} — leaving it out")
         return None
+    return layer
+
+
+#: OpenStreetMap's own tile server, addressed as an XYZ layer. QGIS ships this
+#: exact entry under Browser -> XYZ Tiles, so this adds no dependency and no
+#: API key — it is the one basemap every QGIS install already knows about.
+#:
+#: The braces are percent-encoded because the URI is itself a query string:
+#: an unencoded `{z}` is ambiguous to the parser, and QGIS writes it this way
+#: in a project file it saved itself.
+BASEMAP_URI = (
+    "type=xyz&zmin=0&zmax=19&url="
+    "https://tile.openstreetmap.org/%7Bz%7D/%7Bx%7D/%7By%7D.png"
+)
+BASEMAP_TITLE = "Streets and places (OpenStreetMap)"
+
+
+def _basemap() -> QgsRasterLayer | None:
+    """Real streets under the workflow, so the shapes are somewhere recognisable.
+
+    Everything else in this project is drawn from the record or from the files
+    the record points at. This layer is drawn from neither: it is context, and
+    it is the only layer here that needs a network connection.
+
+    Returned as None rather than raised on failure, for the same reason
+    ``_load_file`` degrades — a basemap that will not load must not cost a
+    reviewer the four groups that carry the actual claim. **With no network the
+    layer is still valid**; it simply renders blank, because whether a tile
+    server answers is not knowable until something asks for a tile.
+    """
+    layer = QgsRasterLayer(BASEMAP_URI, BASEMAP_TITLE, "wms")
+    if not layer.isValid():
+        print("  note: the OpenStreetMap basemap would not load — "
+              "leaving it out; every other layer is unaffected")
+        return None
+    # Attribution is a condition of using OSM's tiles, not a nicety. The setter
+    # moved onto serverProperties() in QGIS 3.38, so ask which one this build
+    # has rather than which one the docs describe — the project targets 3.34
+    # and is being demonstrated on 4.2.1, and RULES.md §2.5 says detect.
+    target = layer.serverProperties() if hasattr(layer, "serverProperties") else layer
+    target.setAttribution("© OpenStreetMap contributors")
+    target.setAttributionUrl("https://www.openstreetmap.org/copyright")
     return layer
 
 
@@ -275,6 +318,25 @@ def build_layout(project: QgsProject, extent: QgsRectangle, summary: dict) -> No
     legend.setLinkedMap(map_item)
     legend.setTitle("What you are looking at")
     layout.addLayoutItem(legend)
+    # The basemap sits at the root of the tree, below the four groups, so a
+    # legend that follows the tree prints its name directly under the heading
+    # "Where the record has gaps" — reading as though the streets were one of
+    # the gaps. They are the opposite: they are the only layer here that is not
+    # part of the record. Drop it from the legend; the attribution set on the
+    # layer is what OSM's terms actually require, and that travels with the
+    # project rather than with this page.
+    # Detach the legend from the layer tree so the removal below sticks. The
+    # setter was renamed in QGIS 4.0 and the project targets 3.34, so ask the
+    # build which one it has (RULES.md §2.5) rather than picking one.
+    if hasattr(legend, "setSyncMode"):
+        from qgis.core import Qgis
+        legend.setSyncMode(Qgis.LegendSyncMode.Manual)
+    else:
+        legend.setAutoUpdateModel(False)
+    for node in list(legend.model().rootGroup().children()):
+        if node.name() == BASEMAP_TITLE:
+            legend.model().rootGroup().removeChildNode(node)
+    legend.adjustBoxSize()
     legend.attemptMove(QgsLayoutPoint(157, 32, QgsUnitTypes.LayoutMillimeters))
     legend.attemptResize(QgsLayoutSize(46, 118, QgsUnitTypes.LayoutMillimeters))
 
@@ -389,6 +451,17 @@ def build(project_path: pathlib.Path = PROJECT_PATH) -> pathlib.Path:
                               "Files we know about but cannot draw"))
     _add(project, gaps, _load(MAP_GPKG, "the_computer_it_ran_on",
                               "The computer and software it ran on"))
+
+    # --- the ground everything sits on ------------------------------------
+    # Added to the root rather than to a group, and added LAST, which in a QGIS
+    # layer tree means bottom — so it draws underneath every layer above and
+    # never hides the thing being demonstrated. Deliberately not a fifth group:
+    # verify_project.py checks the four group names against GROUPS, and the
+    # four groups are the story. This is the paper the story is printed on.
+    basemap = _basemap()
+    if basemap is not None:
+        project.addMapLayer(basemap, False)
+        project.layerTreeRoot().addLayer(basemap).setItemVisibilityChecked(True)
 
     _zoom_to(project, areas)
 

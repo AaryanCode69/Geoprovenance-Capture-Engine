@@ -110,7 +110,7 @@ A healthy load reads, in order:
 
 ```
 GeoProvenance loading. Session <uuid>
-database ready at /home/.../geoprov-dev/geoprovenance/provenance.db (schema version 1)
+database ready at /home/.../geoprov-dev/geoprovenance/provenance.db (schema version 2)
 ```
 
 followed by lines from the three capture channels installing.
@@ -131,17 +131,33 @@ log rather than waiting for a popup.
 
 Click the toolbar button, or **Plugins → GeoProvenance → Show GeoProvenance panel**.
 
-The dock opens on the right and says:
+> **Changed 30 Aug 2026.** This section used to say the panel would stay empty for the
+> rest of the project, because the content that fills it was Person C's unwritten Phase-3
+> work. It is written — `geoprovenance/ui/panel.py`, installed through the `set_content`
+> seam by `plugin.py:_fill_dock`. An empty panel is **no longer** the expected state once
+> something has been captured.
 
-> **GeoProvenance**
-> No workflow to show yet.
-> *Run a Processing algorithm and its record will appear here.*
+The dock opens on the right with four things in it:
 
-**It will keep saying that.** The dock is Person A's shell; the family-tree view and the
-audit panel that fill it are Person C's Phase-3 work, through the `set_content` seam in
-`geoprovenance/ui/dock.py`. **An empty panel here is the design, not a bug.** The evidence
-that capture is working lives in the log, the **Provenance database…** dialog, and the
-database file — not in this panel.
+| | |
+|---|---|
+| **a dropdown** | every piece of work recorded so far, labelled `Untitled workflow  (2 jobs)` |
+| **Refresh** | re-reads the list |
+| **two tabs** | **How the files relate** — the family tree; **Can we run it again?** — the report |
+| **Check it still holds** | runs the five-part check and fills the second tab |
+
+Before anything has been captured it says:
+
+> Nothing recorded yet. Run something in QGIS and it will appear here.
+
+**The panel does not refresh itself.** It reads the record when it is built and when you
+press **Refresh** — there is no signal from the capture engine to the widget, deliberately,
+because a panel that redraws inside a Processing run is a panel that can slow one down
+(`RULES.md` §5.1). So the loop while you work is: *run an algorithm → press Refresh*. If
+the tree does not change, press Refresh before concluding the run was not captured.
+
+The same applies to the score. **Check it still holds** re-reads every file off disk, so it
+is a button rather than something that happens on its own.
 
 ---
 
@@ -160,11 +176,19 @@ to this repo:
 ```
 
 These are written by this repo's own hand-rolled writers, and all of them were verified to
-open in QGIS 4.2.1 and GDAL 3.13.3 on 24 Aug 2026.
+open in QGIS 4.2.1 and GDAL 3.13.3 on 24 Aug 2026. They are real coordinates around
+Bengaluru, so they land on a basemap correctly.
+
+**Put streets underneath them first.** In the **Browser** panel: *XYZ Tiles →
+OpenStreetMap*, double-click. It appears at the top of the Layers panel, so drag it to the
+bottom or everything else is hidden behind it. This ships with QGIS — nothing to install —
+and it is what turns three lines and some dots into a recognisable piece of a city.
 
 ### 3.2 Run a Buffer from the Toolbox dialog — the row that matters most
 
-**Processing → Toolbox → Vector geometry → Buffer.** Input `roads`, distance `500`, **Run**.
+**Processing → Toolbox → Vector geometry → Buffer.** Input `roads`, distance **`0.0045`**, **Run**.
+
+> The distance is in the layer's own units, and these layers are in EPSG:4326 — **degrees**, not metres. `0.0045°` is about 500 m at this latitude, which is the figure `qgis_demo/scenario.py` uses. Typing `500` asks for a buffer 500 degrees wide; QGIS will not refuse it, it will just hand back something absurd.
 
 Then check three places, in this order:
 
@@ -335,7 +359,7 @@ Anything else names the step that failed.
 | No **GeoProvenance** tab in Log Messages | the plugin never loaded at all | Check the **Python** tab of Log Messages for an import traceback |
 | "loaded in a degraded state" | the store or a channel failed | The reason is the log line just above it; `initGui` cannot raise (§5.1) |
 | Counts stay at 0 after a run | that invocation path is not captured | **This is a result, not a bug.** Record it in `capture_coverage.md` §1 |
-| The panel is empty | Person C's Phase-3 content does not exist yet | By design — see §2.4 |
+| The panel is empty after a run | it does not refresh itself | Press **Refresh**. If still empty, the run was not captured — check the log (§2.4) |
 | The hook never fires | QGIS 4 removed the mechanism | Known and documented; `run_wrapper` is what carries capture here |
 | `make test-qgis` fails | it uses the venv Python, which has no QGIS | Run pytest inside the Flatpak interpreter — see Part 5 |
 | Menu items appear twice after a reload | an unload step failed | The failing step is named in the log at CRITICAL |

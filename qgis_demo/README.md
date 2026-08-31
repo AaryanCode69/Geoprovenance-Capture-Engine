@@ -63,7 +63,14 @@ while the work was happening.
 
 ## Walking someone through the project
 
-Open `project/GeoProvenance.qgz`. Four groups, in order, top to bottom.
+Open `project/GeoProvenance.qgz`. Four groups, in order, top to bottom, over a basemap.
+
+**0 — The streets underneath.** Real Bengaluru, drawn from OpenStreetMap, sitting below
+everything else. It is the only layer in the project that is not part of the record and
+the only one that needs a network connection — it is there so the shapes above it are
+somewhere a person recognises rather than lines floating on white. **With no network it
+draws blank and nothing else changes**, which is the point of keeping it at the bottom and
+out of the legend. Attribution travels with the layer, as OpenStreetMap's terms require.
 
 **1 — What we started with.** Six roads, one city boundary, fourteen schools. Ordinary
 data, the kind anybody would begin with.
@@ -117,7 +124,9 @@ footprints.py     works out where a file sits on Earth, standard library only
 
 Two deliberate choices are worth knowing about.
 
-**Nothing here adds a dependency.** No GDAL, no fiona, no geopandas. `RULES.md` §2.2
+**Nothing here adds a dependency.** The OpenStreetMap basemap is an XYZ layer QGIS
+already ships under *Browser → XYZ Tiles*, so it needs no library, no account and no API
+key. Beyond that: no GDAL, no fiona, no geopandas. `RULES.md` §2.2
 keeps them out, and the demo has to rebuild on a machine with no GIS stack. The
 GeoPackage and Shapefile writers are hand-rolled against the OGC and ESRI specifications,
 the same way `tests/fixtures/_minifiles.py` already does it. That file is *not* imported

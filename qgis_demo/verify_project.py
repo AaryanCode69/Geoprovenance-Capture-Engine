@@ -21,7 +21,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from qgis.core import QgsApplication, QgsProject                # noqa: E402
+from qgis.core import (                                         # noqa: E402
+    QgsApplication, QgsProject, QgsVectorLayer,
+)
 
 from qgis_demo import scenario                                  # noqa: E402
 from qgis_demo.build_project import GROUPS, PROJECT_PATH        # noqa: E402
@@ -56,6 +58,14 @@ def verify() -> int:
     layers = project.mapLayers().values()
     for layer in sorted(layers, key=lambda item: item.name()):
         valid = layer.isValid()
+        if not isinstance(layer, QgsVectorLayer):
+            # The basemap. It has no features to count and no labels, and
+            # whether it will actually draw depends on a tile server answering,
+            # which this check deliberately does not test — a review room with
+            # no network must still pass here, because every layer that carries
+            # the claim is local.
+            check(valid, f"{layer.name():<38} loaded (background map)")
+            continue
         count = layer.featureCount() if valid else -1
         renderer = type(layer.renderer()).__name__ if layer.renderer() else "none"
         labels = "labelled" if layer.labelsEnabled() else "no labels"
@@ -68,6 +78,8 @@ def verify() -> int:
     # A layer that renders far away is the classic sign of a coordinate system
     # that was assumed rather than read.
     for layer in layers:
+        if not isinstance(layer, QgsVectorLayer):
+            continue          # the basemap covers the world; that is its job
         if not layer.isValid() or layer.featureCount() == 0:
             continue
         extent = layer.extent()
