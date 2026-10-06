@@ -1,196 +1,144 @@
 # GeoProvenance
 
-Automated Spatial Workflow Lineage Tracking and Reproducibility Framework for QGIS.
+**Automatic provenance capture and reproducibility auditing for QGIS Processing workflows.**
 
-A QGIS plugin that automatically captures Processing Framework operations, maps them to the W3C PROV-O standard, fingerprints input/output datasets (SHA-256), visualizes provenance as an interactive DAG, and produces a quantitative reproducibility audit score.
+[![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](./LICENSE)
+[![QGIS](https://img.shields.io/badge/QGIS-3.28%E2%80%934.x-589632.svg)](https://qgis.org)
+![Version](https://img.shields.io/badge/version-0.1.0-informational.svg)
+<!-- DOI badge: replace once Zenodo has minted the DOI (see docs/RELEASING.md)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+-->
 
-Full research background, literature review, and architecture rationale: [`geoprovenance_research.md`](./geoprovenance_research.md).
+GeoProvenance is a QGIS plugin that keeps a record of where every output file came from. It runs in the background:
+- **Records each job.** Whenever a QGIS Processing algorithm runs, the plugin notes which algorithm it was, its parameters, the files it read and wrote, timings, and the software environment.
+- **Stores the record.** Everything goes into a local SQLite database whose shape follows the W3C PROV-O standard.
+- **Fingerprints files.** Each dataset gets a SHA-256 fingerprint, plus structural fingerprints that tell a harmless re-save apart from a real change to the data.
+- **Shows the workflow.** A dock panel draws it as a family tree of files and jobs.
+- **Scores reproducibility.** It reports how reproducible the workflow still is (0–100) and names any input that has gone missing or changed.
+
+It needs no third-party Python packages, only the standard library and PyQGIS.
 
 ---
 
-## Environment
+## Features
 
-| Requirement | Version |
+- **Multi-channel automatic capture.** Four independent channels: a `processing.run()` wrapper, a Processing Toolbox wrapper, the QGIS history registry (with a polling fallback), and the Processing post-execution hook. A job seen by more than one channel is merged into a single record and marked as corroborated.
+- **Standards-based record.** Files, jobs and environments are stored as PROV entities, activities and agents. `used` / `wasGeneratedBy` / `wasDerivedFrom` relations are inferred automatically. The record exports to PROV-JSON.
+- **Change classification beyond checksums.** Shapefiles and GeoPackages get `structure`, `geometry` and `attributes` fingerprints alongside the byte hash. Two versions of a file can then be classified as `unchanged`, `resaved`, `attributes_changed`, `geometry_changed`, `schema_changed`, `changed` or `unknown`. Files larger than 500 MB fall back to a schema-and-sample fingerprint.
+- **Workflow grouping.** Jobs in a QGIS session are grouped into workflows by the files they share, and put in order by start time. The plugin menu has items to start a new workflow and to name the current one; those two dialogs have not yet been tested by hand.
+- **Reproducibility audit.** A weighted 5-component score:
+
+  | Check | Weight |
+  |---|---|
+  | input data exists | 30 |
+  | input data unchanged | 25 |
+  | algorithms available | 20 |
+  | environment similar | 15 |
+  | parameters valid | 10 |
+
+  A check that cannot be run is reported as *not run*, never as passed.
+- **Never breaks QGIS.** All capture code that runs inside QGIS is wrapped so a failure is logged and the user's job carries on.
+
+## Status and tested environment
+
+GeoProvenance is **experimental** (version 0.1.0, `experimental=True` in `metadata.txt`). Read the points below before relying on it.
+
+- **Verified on QGIS 4.2.1** (Python 3.13, Qt 6.10, PyQt6, Linux). On that version the plugin loads and unloads cleanly (11/11 in-QGIS lifecycle tests), and a 4-step workflow driven by `processing.run()` was captured completely (4/4).
+- **QGIS 3.x LTS is not yet verified.** The code supports PyQt5 and PyQt6 through runtime feature detection, but no 3.x release has been tested.
+- **Capture coverage is only partly measured.** One of ten invocation paths (scripted `processing.run()`) has been measured live; the Toolbox, Graphical Modeler and batch paths have not. See [`docs/capture_coverage.md`](./docs/capture_coverage.md).
+- **The post-execution hook does not fire on QGIS 4.** The setting exists but QGIS 4 never calls it. On QGIS 4, capture goes through the `processing.run()` and Toolbox wrappers instead.
+- **Only some job durations can be trusted.** Durations are reliable only for rows captured by the `run_wrapper` and `toolbox` channels; check the `capture_channel` column.
+
+## Requirements
+
+| | |
 |---|---|
-| **Python** | **3.10+** (developed against Python 3.10 or 3.11 — matches QGIS 3.34 LTS's bundled interpreter; do not use 3.12+ until QGIS LTS ships it) |
-| **QGIS** | 3.34 LTS or newer |
-| **Plugin API** | PyQGIS + PyQt5 |
-| **Storage** | SQLite (`sqlite3`, stdlib) |
-| **Hashing** | `hashlib` (SHA-256, stdlib) |
-| **Testing** | `pytest` + `pytest-qgis` |
-| **Version control** | Git |
+| QGIS | 3.28 or newer (tested on 4.2.1) |
+| Python | the interpreter bundled with QGIS |
+| Runtime dependencies | none beyond the Python standard library and PyQGIS |
+| Development / tests | Python 3.10+, `pytest`, `jsonschema` (`pytest-qgis` for the in-QGIS tests) |
 
-Everyone must develop and test against the **same Python version installed with your QGIS 3.34 LTS instance** (check via the QGIS Python console: `import sys; sys.version`). Mismatched interpreter versions between QGIS's bundled Python and a separately installed system Python is the most common source of "works for me" plugin bugs — always run tests through `pytest-qgis`, not a bare system `python3`.
+## Installation
 
-No external heavyweight dependencies (no `prov`, `rdflib`, `pydot`) — the project uses a custom lightweight PROV model and PyQt5-native visualization to keep the plugin dependency-free (see research doc §6.2, §6.5).
+The plugin is the folder `src/geoprovenance/`.
 
----
+**Manual install.** Copy (or symlink) `src/geoprovenance` into your QGIS profile's plugin folder:
 
-## Developer setup
+| OS | Plugin folder |
+|---|---|
+| Linux | `~/.local/share/QGIS/QGIS4/profiles/default/python/plugins/` |
+| Windows | `%APPDATA%\QGIS\QGIS4\profiles\default\python\plugins\` |
+| macOS | `~/Library/Application Support/QGIS/QGIS4/profiles/default/python/plugins/` |
 
-### 1. Environment
+On QGIS 3.x, use `QGIS3` instead of `QGIS4` in the path. Then restart QGIS and open **Plugins → Manage and Install Plugins → Installed**. Tick **GeoProvenance**. You may first need to enable *Show also experimental plugins* in the Settings tab.
 
-```bash
-git clone <repo-url>
-cd Course-Project
-make venv            # creates .venv, installs dev deps, prints its Python version
-```
+**From a clone (developers).** `make deploy` symlinks `src/geoprovenance` into a separate `geoprov-dev` QGIS profile, and `make qgis` launches QGIS on that profile. `make where` shows which profile folder is used.
 
-**Check that version against QGIS.** In the QGIS Python console run `import sys; sys.version`. If it does not match what `make venv` printed, delete `.venv` and rebuild it against the QGIS interpreter. A mismatch between QGIS's bundled Python and a separately installed system Python is the most common source of "works for me" plugin bugs.
+## Quick start
 
-### 2. Run the tests
+1. Enable the plugin. A **GeoProvenance** menu and dock panel appear.
+2. Run any Processing algorithm, from the Toolbox or from the Python console with `processing.run(...)`.
+3. Open the GeoProvenance dock. Pick the workflow to see its family tree of files, then open the audit tab to see its reproducibility score.
 
-```bash
-make test            # everything that runs without QGIS — do this first
-make test-capture    # needs QGIS; run inside the dev profile
-```
+The record is stored in `<QGIS profile>/geoprovenance/provenance.db`. You can change that location with the QSettings key `GeoProvenance/database_path`. A full walkthrough, including what each menu item does, is in [`docs/RUNNING_IN_QGIS.md`](./docs/RUNNING_IN_QGIS.md).
 
-`make test` works on any machine, with no QGIS and no GIS stack installed. That is deliberate: it is what lets Person B and Person C build against the storage layer and the shared fixtures immediately.
+## Running the tests and demos
 
-> Do not run `pytest tests/storage` directly — `pytest-qgis` imports `qgis.core` at plugin-load time, before any conftest, so a bare invocation crashes without QGIS and masks violations with it. The `make` targets pass `-p no:pytest_qgis`.
-
-### 3. A separate QGIS profile
-
-**Never develop against your normal QGIS profile.** A crash in capture code must not take out a working installation.
+None of these need QGIS installed:
 
 ```bash
-qgis --profile geoprov-dev     # creates it on first run; or: make qgis
+make venv            # create .venv with the development dependencies
+make test            # the full test suite that runs without QGIS (523 tests)
+make demo1           # one job captured automatically
+make demo2           # a 4-step workflow captured in order, nothing missing
+make demo-workflow   # family tree + reproducibility score; edits a file and shows the score drop
 ```
 
-### 4. Install the plugin into that profile
+The tests that need a running QGIS are run separately, inside QGIS, with `make test-qgis`. `make help` lists every command. A full visual demonstration inside QGIS (a styled project built from a real captured run) is described in [`qgis_demo/README.md`](./qgis_demo/README.md).
 
-```bash
-make deploy          # symlinks ./geoprovenance into the dev profile's plugins dir
-make deploy -- where # show the paths without changing anything
+## Repository layout
+
+```
+src/geoprovenance/     the QGIS plugin
+  capture/             capture channels, event normaliser, environment probe
+  storage/             SQLite schema, migrations, ProvenanceStore API, workflow grouping
+  fingerprint/         SHA-256 + structural fingerprints and change classification
+  prov.py              PROV graph, derivation inference, PROV-JSON export
+  audit.py             reproducibility score and reports
+  ui/                  dock, graph layout (no Qt) and graph panel
+tests/                 pytest suite and shared fixtures (real .shp / .gpkg files)
+demos/                 one-command demos that run without QGIS
+qgis_demo/             end-to-end visual demonstration inside QGIS
+schemas/               JSON Schema for captured events
+experiments/           evaluation harness (capture completeness, runtime overhead)
+tools/                 deploy and icon scripts
+docs/                  architecture, data contracts, coverage measurements
 ```
 
-A symlink, not a copy — edit a file in the repo and the change is live. Then in QGIS: **Plugins → Manage and Install Plugins → Installed → tick GeoProvenance**.
+## Documentation
 
-`make undeploy` removes the link. The script refuses to touch any profile other than `geoprov-dev`.
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md): how the parts fit together
+- [`docs/DFD.md`](./docs/DFD.md): how information moves through the system
+- [`docs/USE_CASES.md`](./docs/USE_CASES.md): what a user can do with it
+- [`docs/EXPLAINER.md`](./docs/EXPLAINER.md): the whole system end to end, in plain language
+- [`docs/CONTRACT_schema.md`](./docs/CONTRACT_schema.md) and [`docs/CONTRACT_event.md`](./docs/CONTRACT_event.md): the database shape and the captured-event format
+- [`docs/capture_coverage.md`](./docs/capture_coverage.md): measured capture coverage, per invocation path and QGIS version
+- [`docs/RUNNING_IN_QGIS.md`](./docs/RUNNING_IN_QGIS.md): running the plugin by hand
+- [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md): developer setup and project organisation
+- [`CHANGELOG.md`](./CHANGELOG.md): release notes
 
-### 5. The edit / reload loop
+## How to cite
 
-Install **Plugin Reloader** (Plugins → Manage and Install Plugins → search "Plugin Reloader"), then set it to reload `geoprovenance`. The loop is:
+If you use GeoProvenance in your research, please cite it using the metadata in [`CITATION.cff`](./CITATION.cff). GitHub shows this as "Cite this repository". A DOI will be added on the first archived release.
 
-1. Edit a file in the repo.
-2. Click Plugin Reloader's button (or press its shortcut).
-3. Watch the **GeoProvenance** tab of **View → Panels → Log Messages** — a clean reload logs `unloaded cleanly`.
+## License
 
-If you see duplicate menu entries after a reload, something in `unload()` did not fire. That is a §5.4 bug, not a cosmetic one.
+GeoProvenance — Copyright (C) 2026 Aaryan Upadhyay, Saniya Goyal, Dibyendu De.
 
-### 6. Inspecting the output
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 2 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [`LICENSE`](./LICENSE) for the full text.
 
-The provenance database lives at `<qgis profile>/geoprovenance/provenance.db`, overridable with the single QSettings key `GeoProvenance/database_path`. Open it with DB Browser for SQLite or the `sqlite3` CLI. **Plugins → GeoProvenance → Provenance database…** shows the active path.
+## Support and contributing
 
-### Useful commands
-
-```bash
-make help            # list everything
-make fixtures        # regenerate the shared mock dataset (tell B and C if it changes)
-make schema-check    # apply schema.sql to a throwaway database and report
-make demo1           # run the Review 1 demo
-```
-
----
-
-## Team Structure — 3 People, Independent Components
-
-The project is split into three components with a **frozen shared contract** defined up front, so all three people build and test in parallel without waiting on each other's code. The contract is:
-
-- The SQLite schema in research doc §7.1 (`entities`, `activities`, `agents`, `fingerprints`, `relations`, `workflows`, `audit_results`)
-- The event/PROV-JSON shape shown in research doc §7.3 (worked Buffer→Clip example)
-
-A shared **mock dataset** (a hand-built SQLite file + JSON matching §7.3) is generated once in Phase 0 and used by everyone as test fixtures — nobody needs the real capture engine running to develop or test their own component.
-
-### Person A — Capture Engine & Storage
-
-Owns everything left of "PROV Mapper" in the architecture diagram (research doc §5.1).
-
-- QGIS plugin skeleton (Plugin Builder scaffold)
-- Post-execution hook (`processing.run()` wrapper)
-- `QgsHistoryProviderRegistry.entryAdded` signal listener (redundant capture channel)
-- Event normalizer (dedup, parameter parsing, CRS extraction)
-- SQLite schema implementation + CRUD layer
-
-Reference: research doc §5.2, §5.3, §7.1.
-
-### Person B — Provenance Modeling, Fingerprinting & Export
-
-Owns everything from "PROV Mapper" through "Data Fingerprinter" in the architecture diagram.
-
-- Custom lightweight PROV model — Entity / Activity / Agent classes
-- Relation inference (`wasDerivedFrom` from input/output path overlap)
-- SHA-256 tiered fingerprinting (file-level hash; schema+sample-hash fallback for large vectors)
-- PROV-JSON / JSON-LD exporter
-
-Fully testable standalone: fingerprinting only needs a file path; PROV mapping only needs the mock event data from Phase 0.
-
-Reference: research doc §4.3 (Layers 2–3), §6.2, §6.4, §7.2.
-
-### Person C — Visualization & Reproducibility Audit
-
-Owns the two output modules: DAG Viewer and Reproducibility Audit.
-
-- DAG viewer: PyQt5 `QGraphicsScene` dock widget, hierarchical top-to-bottom layout, node/edge rendering with status color-coding (verified/changed/missing)
-- Reproducibility audit engine: 5-component weighted scorer (input exists 30%, input unchanged 25%, algorithm available 20%, environment similar 15%, parameters valid 10%)
-- Audit report generator (text + visual)
-
-Fully testable standalone against the mock SQLite DB from Phase 0 — never needs a live QGIS capture session.
-
-Reference: research doc §4.3 (Layers 4–5), §7.1 (`audit_results`).
-
----
-
-## Phases
-
-### Phase 0 — Contracts (joint, short)
-
-The only phase requiring lockstep coordination. All three agree on and freeze:
-- The §7.1 SQLite schema
-- The event-dict shape Person A's capture engine will emit
-- The §7.3-style PROV-JSON shape
-
-Build the shared mock dataset from these contracts.
-
-### Phase 1 — Independent Build (parallel, bulk of the project)
-
-Each person builds and unit-tests their component in isolation against the Phase 0 contracts and mock data. No cross-waiting.
-
-### Phase 2 — Integration
-
-Wire the real pipeline together: Person A's capture engine → Person B's PROV mapper + fingerprinter → shared SQLite DB → Person C's DAG viewer + audit engine now read from the live DB instead of the mock. Budget real time here — this is where contract mismatches surface, even though the interface was fixed in Phase 0.
-
-### Phase 3 — Experiments, Paper & Polish
-
-Split by research question (research doc §9), matching each person's component:
-
-| Owner | Research question | What's measured |
-|---|---|---|
-| Person A | RQ1 — capture completeness; RQ2 — runtime/storage overhead | Their engine is the thing being measured |
-| Person B | RQ3 — change-detection accuracy via fingerprinting | Plus PROV-JSON schema validation |
-| Person C | RQ4 — reconstruction accuracy via DAG traversal | Plus the GeoProvenance vs. GeoLineage vs. History Manager comparison table |
-
-Each person drafts the methodology subsection for their own layer; Introduction, Related Work, and Results are synthesized jointly at the end.
-
-### Stretch Goal — Workflow Replay
-
-Not assigned by default (research doc §4.3 Layer 6, "stretch goal"). Whoever finishes their track first can pick it up — it extends both Person A's capture side (re-invoking `processing.run()`) and Person B's PROV side (reading back stored relations).
-
----
-
-## Feature Priority (for scope decisions during Phase 1)
-
-| Feature | Priority | Owner |
-|---|---|---|
-| Automatic `processing.run()` capture | MUST HAVE | A |
-| W3C PROV-O mapping | MUST HAVE | B |
-| SQLite storage | MUST HAVE | A |
-| SHA-256 fingerprinting | MUST HAVE | B |
-| Reproducibility audit + scoring | MUST HAVE | C |
-| PROV-JSON/JSON-LD export | MUST HAVE | B |
-| DAG visualization | SHOULD HAVE | C |
-| Multi-step workflow chaining | SHOULD HAVE | A/B |
-| Plugin version tracking | SHOULD HAVE | A |
-| Workflow replay | STRETCH GOAL | unassigned |
-
-Explicitly out of scope for this project: manual geometry edit tracking, non-Processing plugin GUI tracking, RDF/SPARQL queries, web-based (D3.js) visualization, cross-plugin unification, real-time collaboration, cloud/remote data provenance (full rationale in research doc §13.13).
+- Report bugs and ask questions through [GitHub Issues](https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/issues).
+- Contact: aaryanupadhyay68@gmail.com
+- See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for how to run the tests and submit changes.

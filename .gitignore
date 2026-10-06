@@ -48,3 +48,11 @@ experiments/data/
 .idea/
 *.swp
 .DS_Store
+
+# Private — never publish. Patent strategy, manuscript drafts and planning notes.
+# A Zenodo DOI archives every tracked file, so these must never be tracked.
+docs/patent/
+docs/MANUSCRIPT_PLAN.md
+docs/V3_INVALIDATION_PLAN.md
+docs/Journal/
+docs/Project_1_Journal_V4.pdf

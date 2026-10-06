@@ -28,6 +28,8 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 
-# Import geoprovenance from the working tree without installing it.
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+SRC = REPO_ROOT / "src"
+
+# Import geoprovenance from the working tree (src/ layout) without installing it.
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))

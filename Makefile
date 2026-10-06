@@ -21,7 +21,7 @@ PY := .venv/bin/python
 # Override the whole thing for a native install:
 #     make qgis-demo-project QGIS_PY=python3
 QGIS_APP    := org.qgis.qgis
-QGIS_PYPATH := /app/share/qgis/python:/app/share/qgis/python/plugins:$(CURDIR)
+QGIS_PYPATH := /app/share/qgis/python:/app/share/qgis/python/plugins:$(CURDIR):$(CURDIR)/src
 QGIS_PY     ?= flatpak run --command=python3 --filesystem=home \
                  --env=PYTHONPATH=$(QGIS_PYPATH) \
                  --env=QGIS_PREFIX_PATH=/app \
@@ -51,7 +51,7 @@ help:
 	@echo "make qgis          launch QGIS on the geoprov-dev profile"
 	@echo ""
 	@echo "make fixtures      regenerate the fixtures Person B and C consume (RULES.md §3.4)"
-	@echo "make icon          regenerate geoprovenance/icon.png"
+	@echo "make icon          regenerate src/geoprovenance/icon.png"
 	@echo "make schema-check  apply schema.sql to a throwaway database and report"
 	@echo "make demo1/2/3     run the Review 1 / Review 2 / Final demo"
 	@echo "make demo-workflow the family tree + score demo (no QGIS needed)"
@@ -132,7 +132,7 @@ qgis:
 
 schema-check:
 	@$(PY) -c "import sqlite3,pathlib,tempfile,os; \
-sql=pathlib.Path('geoprovenance/storage/schema.sql').read_text(); \
+sql=pathlib.Path('src/geoprovenance/storage/schema.sql').read_text(); \
 p=os.path.join(tempfile.mkdtemp(),'t.db'); c=sqlite3.connect(p); c.executescript(sql); \
 t=[r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name\")]; \
 i=[r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx%'\")]; \

@@ -30,7 +30,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from _presenter import Demo, human_size, human_time, require_python, scratch_dir  # noqa: E402
 

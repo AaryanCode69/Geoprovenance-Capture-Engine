@@ -95,7 +95,7 @@ That is correct, not a failure.
 The dock starts hidden on purpose — `plugin.py` calls `self.dock.hide()` so the plugin does
 not steal screen space on first load. It is opt-in.
 
-The four menu items (`geoprovenance/plugin.py:_build_actions`):
+The four menu items (`src/geoprovenance/plugin.py:_build_actions`):
 
 - **Show GeoProvenance panel** — toggles the dock
 - **Start new workflow** — draws a boundary the file paths cannot see (A6)
@@ -133,7 +133,7 @@ Click the toolbar button, or **Plugins → GeoProvenance → Show GeoProvenance 
 
 > **Changed 30 Aug 2026.** This section used to say the panel would stay empty for the
 > rest of the project, because the content that fills it was Person C's unwritten Phase-3
-> work. It is written — `geoprovenance/ui/panel.py`, installed through the `set_content`
+> work. It is written — `src/geoprovenance/ui/panel.py`, installed through the `set_content`
 > seam by `plugin.py:_fill_dock`. An empty panel is **no longer** the expected state once
 > something has been captured.
 
@@ -326,7 +326,7 @@ Two warnings that have already cost time once:
 - **Never run bare `pytest tests` inside QGIS.** Seven tests fail there and none is a
   defect — they assert the *no-QGIS degradation* path on purpose. Use `make test` outside
   QGIS and the marker-filtered `-m qgis` run inside it.
-- Running the icon test inside QGIS **rewrites `geoprovenance/icon.png`**, because zlib
+- Running the icon test inside QGIS **rewrites `src/geoprovenance/icon.png`**, because zlib
   differs between Python 3.10 and 3.13. Check `git status` afterwards.
 
 ---

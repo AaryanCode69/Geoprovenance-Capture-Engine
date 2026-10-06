@@ -18,7 +18,8 @@ import sys
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-STORAGE_DIR = REPO_ROOT / "geoprovenance" / "storage"
+SRC = REPO_ROOT / "src"
+STORAGE_DIR = SRC / "geoprovenance" / "storage"
 
 BANNED = ("qgis", "PyQt5", "PyQt6", "qgis.core", "qgis.gui", "qgis.utils")
 
@@ -102,7 +103,7 @@ def test_storage_module_imports_without_qgis(module: str) -> None:
     code = _PROBE.format(banned=BANNED, module=module)
     result = subprocess.run(
         [sys.executable, "-c", code],
-        cwd=REPO_ROOT,
+        cwd=SRC,
         capture_output=True,
         text=True,
     )

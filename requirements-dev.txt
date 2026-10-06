@@ -1,8 +1,8 @@
 # Development and test dependencies only.
 #
-# RULES.md §2.2 — plugin code under geoprovenance/ uses the Python standard
+# RULES.md §2.2 — plugin code under src/geoprovenance/ uses the Python standard
 # library plus PyQGIS/PyQt5 and NOTHING else. Nothing in this file may be
-# imported from geoprovenance/.
+# imported from src/geoprovenance/.
 #
 # RULES.md §2.1 — install into a venv built on the SAME Python that ships with
 # your QGIS 3.34 LTS. Check with, in the QGIS Python console:

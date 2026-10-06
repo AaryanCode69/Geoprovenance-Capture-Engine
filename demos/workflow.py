@@ -45,7 +45,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "tests" / "fixtures"))
 
 import _minifiles  # noqa: E402

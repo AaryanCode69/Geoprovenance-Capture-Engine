@@ -1,0 +1,22 @@
+{
+  "title": "GeoProvenance: automatic provenance capture and reproducibility auditing for QGIS Processing workflows",
+  "upload_type": "software",
+  "version": "0.1.0",
+  "publication_date": "2026-10-06",
+  "description": "<p>GeoProvenance is a QGIS plugin that automatically records QGIS Processing executions, stores them in SQLite mapped to the W3C PROV-O model, fingerprints input and output datasets (SHA-256 plus structural fingerprints that distinguish re-saves from real changes), draws the workflow as a provenance graph, and scores how reproducible the workflow still is. It uses only the Python standard library and PyQGIS.</p>",
+  "creators": [
+    {"name": "Upadhyay, Aaryan"},
+    {"name": "Goyal, Saniya"},
+    {"name": "De, Dibyendu"}
+  ],
+  "license": "GPL-2.0-or-later",
+  "access_right": "open",
+  "keywords": ["QGIS", "provenance", "W3C PROV", "reproducibility", "GIS", "geoprocessing", "workflow lineage"],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/tree/v0.1.0",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

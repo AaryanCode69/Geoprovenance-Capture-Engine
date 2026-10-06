@@ -23,7 +23,7 @@ import zlib
 import pytest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-PLUGIN = REPO_ROOT / "geoprovenance"
+PLUGIN = REPO_ROOT / "src" / "geoprovenance"
 METADATA = PLUGIN / "metadata.txt"
 ICON = PLUGIN / "icon.png"
 

@@ -10,7 +10,7 @@ Operating instructions for Claude working in this repository.
 **GeoProvenance** — a QGIS plugin that automatically records what QGIS Processing algorithms did, stores it in SQLite mapped to the W3C PROV-O standard, fingerprints the datasets with SHA-256, draws the workflow as a graph, and scores how reproducible the workflow still is.
 
 - Full background, literature review, schema, and experiments: [`geoprovenance_research.md`](./geoprovenance_research.md)
-- Team split and phases: [`README.md`](./README.md)
+- Team split and phases: [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) (moved out of `README.md`, which is now the public SoftwareX-facing README)
 - This developer's full task breakdown: [`PERSON_A.md`](./PERSON_A.md)
 
 It is a **3-month course project ending in a research paper**, assessed at three graded reviews: **Week 4, Week 8, Week 12**.
@@ -71,6 +71,7 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
   **Do not use `dock._qt_enum` here.** It hardcodes `Qt` as the owner; `RenderHint` belongs to `QPainter` and `DragMode` to `QGraphicsView`, and asking `Qt` for either raises on both bindings. `panel._member(owner, enum, name)` takes the owner. The Qt-only version **imported cleanly and threw when the panel was constructed** — an import check passed it straight through, which is why `tests/capture/test_panel.py` builds the widget rather than importing it.
 - `capture/engine.py` — **B's two passes wired in, 30 Aug 2026**, after the commit, never inside the §4.3 transaction: fingerprint what was touched, then infer the derivations. `ProvenanceCaptureEngine(..., enrich=False)` turns both off, which is how §8.5's "attribute B's cost separately" gets measured. A captured job now leaves **four** relations, not three; `demos/review1.py` was updated in the same change (§7.9).
 - `demos/workflow.py` + `docs/demos/WORKFLOW.md` — **the workflow-section demo**, passing (`make demo-workflow`, 7/7, byte-identical run to run, no QGIS). Capture -> derivation -> family tree -> score 100, then one starting file is edited behind the software's back and the score falls to 89 **naming the file**. Deliberately **not** one of the three §7 gates: the Final gate's claim ends "and here is what it costs", and the RQ1/RQ2 numbers do not exist yet.
+- `docs/ARCHITECTURE.md`, `docs/DFD.md`, `docs/USE_CASES.md` — **added 1 Sep 2026, one file per diagram.** The system as built, drawn three ways across five mermaid fences: how the parts fit together, how information moves (context, then one level down split into the recording half and the reading-back half — the record is a ten-edge hub and one combined fence was unreadable), and what a person can do with it. Plain-English node labels per §7.5 with a file/owner/status table under each; the two channels never measured live (`post_hook`, `toolbox`) and the three unclicked menu dialogs are drawn dashed per RULES.md §11.4. `ARCHITECTURE.md` §2 records where it departs from `geoprovenance_research.md` §5.1, which was drawn before the code and is wrong in five ways — the research doc is **left as it stands**, as was done for §7.3. Note `docs/DEVELOPMENT.md` (formerly `README.md`) still defines the A/B/C split by pointing at §5.1's boxes. `docs/DIAGRAMS.md` is now a one-page index pointing at the three; it draws nothing, so there is no second copy to drift.
 
 **Two defects found in the committed fixtures on 30 Aug 2026, both now fixed.**
 - **Fixed — an id was doing two jobs.** `fid("w3/centroids")` named both the `native:centroids` activity and the `not_urban_centroids.shp` entity it produced. `relations.source_id` is polymorphic with no FK, so which table an id lives in *is* its type: `get_workflow_graph()` returned that id in both `activities` and `entities`, and the workflow drew a self-loop. The output is now `w3/centroided`; `make fixtures` re-run, `mock_ids.json` key renamed, written up in `tests/fixtures/README.md` for B and C (§3.4 step 5). Found by the layout test asserting a file sits one row below the job that made it.
@@ -81,6 +82,15 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 - `tests/capture/test_plugin_lifecycle.py` asserted `schema_version() == 1` from the A1 commit until 30 Aug — four days after the schema went to 2 — because it only runs inside QGIS and nothing outside could see it go red. Now asserts against `SCHEMA_VERSION`. `make test-qgis` is 17/17.
 
 > **Ownership override, 30 Aug 2026.** Everything above marked *Person B* or *Person C* was written by Person A under an explicit written override of `RULES.md` §1.2 [HARD] and `CLAUDE.md` §2, requested by the user so the workflow section could be demonstrated. Every such module carries an owner header naming the override. **The override has not been extended:** §1.2 still governs, and new B/C work needs the same explicit request. Nothing here touched Person A's frozen surface — no schema change, no migration, no `store.py` signature change — so §3.4 never fired.
+
+**SoftwareX release preparation, 6 Oct 2026 — local only, nothing pushed.**
+- **`src/` layout.** The plugin package moved to `src/geoprovenance/`. QGIS still sees a folder named `geoprovenance`, because `tools/deploy.py` symlinks `src/geoprovenance`.
+- **Path updates.** Every `sys.path` insert (tests' `conftest.py`, `build_fixtures.py`, the demos, `qgis_demo/`), plus `deploy.py`, `make_icon.py` and the Makefile, now point at `src/`. `capture/hooks.py` derives its parent from `__file__`, so it needed no change.
+- **New files.** `LICENSE` (the verbatim GPL-2.0 text; the project is GPL-2.0-or-later, and the notice lives in the README), `CITATION.cff` (validated against CFF 1.2.0), `.zenodo.json`, `CHANGELOG.md`, `CONTRIBUTING.md`, and `docs/RELEASING.md`, which holds the Zenodo DOI steps and the SoftwareX code-metadata table.
+- **README.** It is now public-facing. The old team/phase content moved unchanged into `docs/DEVELOPMENT.md`.
+- **Authors** in `metadata.txt` and the citation files: Aaryan Upadhyay, Saniya Goyal, Dibyendu De.
+- **Private files gitignored.** Patent, manuscript plan and journal drafts are in `.gitignore` and must never be tracked.
+- **Tag.** Local annotated tag `v0.1.0`. **No DOI exists yet**; it is minted only when the user pushes and publishes a release.
 
 **Stubs only** (docstring + rules): `demos/final.py`.
 
@@ -108,7 +118,7 @@ QGIS was installed on 24 August 2026 and the capture path has now executed insid
 | — new — `QgsHistoryProviderRegistry` | Lives in `qgis.gui`, **not** `qgis.core`, on QGIS 4. `history_observer.py` already reaches it correctly via `QgsGui.historyProviderRegistry()`; do not "tidy" that import. Installed and tore down cleanly, but never fired on a script-driven run. |
 | — new — **PyQt6 would have stopped the plugin loading** | `Qt.RightDockWidgetArea` and `Qt.AlignTop` do not exist on Qt 6 (enums are scoped). `ui/dock.py` now uses `_qt_enum()` and `plugin.py` falls back to `QtGui` for `QAction` — feature detection per §2.5, working on both PyQt5 and PyQt6. |
 
-**Do not run `pytest tests` inside QGIS.** Seven tests fail there, none of them a defect: they assert the *no-QGIS* degradation path on purpose (e.g. `test_the_default_needs_qgis_and_says_so_clearly` expects `QgisUnavailableError`). Use `make test` outside QGIS and `make test-qgis` inside. Running `test_regenerating_the_icon_produces_identical_bytes` inside QGIS also **rewrites `geoprovenance/icon.png`** — zlib differs between Python 3.10 and 3.13 — so check `git status` afterwards.
+**Do not run `pytest tests` inside QGIS.** Seven tests fail there, none of them a defect: they assert the *no-QGIS* degradation path on purpose (e.g. `test_the_default_needs_qgis_and_says_so_clearly` expects `QgisUnavailableError`). Use `make test` outside QGIS and `make test-qgis` inside. Running `test_regenerating_the_icon_produces_identical_bytes` inside QGIS also **rewrites `src/geoprovenance/icon.png`** — zlib differs between Python 3.10 and 3.13 — so check `git status` afterwards.
 
 The design compensates rather than hopes: `normalizer.py` and `engine.py` import no QGIS and duck-type instead, so the risky logic is tested and only the thin QGIS adapter is unproven. A guard test now enforces that for `capture/normalizer.py`, `capture/engine.py`, `capture/history_observer.py`, `lifecycle.py` and `log.py` as well as `storage/` — it previously covered `storage/` only, so a stray QGIS import in `engine.py` would have surfaced as a failed demo in a review room.
 
@@ -123,7 +133,7 @@ Never describe unwritten code as existing; update this section when that changes
 ## 4. Target repository layout
 
 ```
-geoprovenance/              # the QGIS plugin package
+src/geoprovenance/          # the QGIS plugin package (src/ layout since v0.1.0)
   __init__.py               # classFactory()
   plugin.py                 # load/unload, menu, toolbar, dock
   metadata.txt              # qgisMinimumVersion=3.34

@@ -2,7 +2,7 @@
 
 Owner: Person A.  Sub-phase: A1.
 
-    make deploy      link  <repo>/geoprovenance -> <profile>/python/plugins/
+    make deploy      link  <repo>/src/geoprovenance -> <profile>/python/plugins/
     make undeploy    remove the link
     make qgis        launch QGIS on the dev profile
 
@@ -43,7 +43,7 @@ from typing import NamedTuple
 PLUGIN_DIR_NAME = "geoprovenance"
 DEV_PROFILE = "geoprov-dev"
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = REPO_ROOT / PLUGIN_DIR_NAME
+SOURCE = REPO_ROOT / "src" / PLUGIN_DIR_NAME
 
 #: QGIS keeps its profiles under a directory named for its MAJOR version —
 #: `QGIS3/profiles/<name>` on 3.x, `QGIS4/profiles/<name>` on 4.x.

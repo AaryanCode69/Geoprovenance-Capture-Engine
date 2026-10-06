@@ -4,7 +4,7 @@ qgisMinimumVersion=3.28
 qgisMaximumVersion=4.99
 description=Automatic W3C PROV-O provenance capture and reproducibility auditing for QGIS Processing workflows
 version=0.1.0
-author=Person A, Person B, Person C
+author=Aaryan Upadhyay, Saniya Goyal, Dibyendu De
 email=aaryanupadhyay68@gmail.com
 
 about=GeoProvenance automatically records every QGIS Processing operation, maps it to
@@ -12,9 +12,9 @@ about=GeoProvenance automatically records every QGIS Processing operation, maps 
     visualises the workflow as a graph, and produces a quantitative reproducibility
     audit score. No external dependencies.
 
-tracker=
-repository=
-homepage=
+tracker=https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/issues
+repository=https://github.com/AaryanCode69/Geoprovenance-Capture-Engine
+homepage=https://github.com/AaryanCode69/Geoprovenance-Capture-Engine
 
 category=Plugins
 icon=icon.png

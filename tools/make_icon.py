@@ -1,4 +1,4 @@
-"""Generate geoprovenance/icon.png — the menu and toolbar icon.
+"""Generate src/geoprovenance/icon.png — the menu and toolbar icon.
 
 Owner: Person A.  Sub-phase: A1.
 
@@ -22,7 +22,7 @@ import zlib
 
 SIZE = 32
 SUPERSAMPLE = 4  # render big, box-filter down — cheap anti-aliasing
-OUT = pathlib.Path(__file__).resolve().parents[1] / "geoprovenance" / "icon.png"
+OUT = pathlib.Path(__file__).resolve().parents[1] / "src" / "geoprovenance" / "icon.png"
 
 NODE_RGB = (46, 125, 50)    # green: a dataset
 EDGE_RGB = (84, 110, 122)   # slate: "came from"

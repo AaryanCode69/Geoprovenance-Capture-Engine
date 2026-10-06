@@ -1,5 +1,5 @@
 # Test configuration only. GeoProvenance is a QGIS plugin, not a pip package —
-# it is deployed by copying/symlinking geoprovenance/ into the QGIS profile's
+# it is deployed by copying/symlinking src/geoprovenance/ into the QGIS profile's
 # plugins directory, so there is no [project] or build-system table here.
 
 [tool.pytest.ini_options]
