@@ -559,6 +559,7 @@ def test_a_dataset_yields_the_byte_hash_and_the_signals_that_explain_it():
     from geoprovenance.fingerprint import (
         STRATEGY_ATTRIBUTES,
         STRATEGY_GEOMETRY,
+        STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_STRUCTURE,
         fingerprint_dataset,
     )
@@ -570,6 +571,7 @@ def test_a_dataset_yields_the_byte_hash_and_the_signals_that_explain_it():
         STRATEGY_FILE,
         STRATEGY_STRUCTURE,
         STRATEGY_GEOMETRY,
+        STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_ATTRIBUTES,
     }
     assert len(strategies) == len(set(strategies)), "one row per method"
@@ -675,9 +677,9 @@ def test_the_whole_set_stores_together_under_the_v2_key(tmp_path):
             entity_id=entity,
             fingerprints=fingerprint_dataset(DATA / "sample_points.shp"),
         )
-        assert len(written) == 4
+        assert len(written) == 5
         assert set(store.get_fingerprint_set(entity)) == {
-            "file", "structure", "geometry", "attributes"
+            "file", "structure", "geometry", "geometry_content", "attributes"
         }
     finally:
         store.close()

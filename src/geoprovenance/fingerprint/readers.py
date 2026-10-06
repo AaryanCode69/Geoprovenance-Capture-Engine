@@ -2,6 +2,10 @@
 
 Owner: Person B.  Research doc §6.4 row 2 ("feature-count + schema hash").
 
+`geometry_chunks` was added by Person A on 6 Oct 2026 under an explicit written
+override of RULES.md §1.2 [HARD], requested by the user for this one fix. The
+override covers that fix only; Person B still owns this file.
+
     RULES.md §2.2 — standard library only. `struct`, `sqlite3`, `pathlib`, `json`.
     RULES.md §4.1 — imports no QGIS, so the whole layer runs under `make test`.
 
@@ -53,6 +57,7 @@ What can be read, and what cannot
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import pathlib
 import sqlite3
@@ -101,6 +106,17 @@ BBOX_DECIMAL_PLACES = 9
 #: §5.1 would refuse anyway. A missing signal compares as `unknown`, which is
 #: true; a cheaper approximate one would be confidently wrong.
 DEFAULT_MAX_ATTRIBUTE_ROWS = 100_000
+
+#: GeoPackage geometry blob header (GeoPackage 1.x, clause 2.1.3): "GP", a
+#: version byte, a flags byte, a 4-byte srs_id, then an optional envelope whose
+#: size is coded in flag bits 1-3. Everything after it is plain WKB.
+_GPKG_BLOB_MAGIC = b"GP"
+_GPKG_BLOB_FIXED_BYTES = 8
+_GPKG_ENVELOPE_BYTES = {0: 0, 1: 32, 2: 48, 3: 48, 4: 64}
+
+#: What a NULL geometry contributes to the geometry digest. A row with no
+#: geometry is still a row, and filling one in or clearing one is an edit.
+_NULL_GEOMETRY = b"NULL"
 
 
 class DatasetReadError(RuntimeError):
@@ -247,6 +263,46 @@ def attribute_chunks(
     return None
 
 
+def geometry_chunks(
+    path: str | pathlib.Path | None,
+    *,
+    max_rows: int = DEFAULT_MAX_ATTRIBUTE_ROWS,
+) -> Iterator[bytes] | None:
+    """Bytes describing the coordinates themselves, or None if unobtainable.
+
+    `DatasetDescription.geometry_payload` describes how many features there are
+    and where their bounding box sits. That misses the edit that matters most
+    for a shoreline or a boundary: one vertex moved without changing the count
+    or the extent. The byte hash moved, structure, geometry and attributes all
+    held, and the comparison called it a re-save. This is the signal that sees
+    the vertex.
+
+    It reads coordinates, not files, so it still survives a re-save: the
+    Shapefile record numbers and the GeoPackage blob header (whose envelope a
+    writer may include or leave out) are left out of it.
+
+    None, as with `attribute_chunks`, when there is nothing trustworthy to say:
+    an unknown format, a GeoPackage over `max_rows`, a geometry that is not a
+    standard GeoPackage blob, or a big-endian WKB. The last is refused rather
+    than byte-swapped, because a re-save that switched byte order would then
+    read as a geometry edit. Every writer this project has met writes
+    little-endian.
+    """
+    if path is None:
+        return None
+    target = pathlib.Path(str(path))
+    suffix = target.suffix.lower()
+    try:
+        if suffix == ".shp":
+            _shapefile_bbox(target)  # checks the magic number before streaming
+            return _shp_record_chunks(target)
+        if suffix in (".gpkg", ".geopackage"):
+            return _geopackage_geometry_chunks(target, max_rows=max_rows)
+    except (OSError, struct.error, sqlite3.Error, DatasetReadError):
+        return None
+    return None
+
+
 # --------------------------------------------------------------------------
 # Shapefile
 # --------------------------------------------------------------------------
@@ -363,6 +419,39 @@ def _dbf_chunks(dbf: pathlib.Path, chunk_bytes: int = 1024 * 1024) -> Iterator[b
                 yield bytes(patched)
             while chunk := handle.read(chunk_bytes):
                 yield chunk
+
+    return stream()
+
+
+def _shp_record_chunks(shp: pathlib.Path) -> Iterator[bytes]:
+    """Every `.shp` record's content, length-prefixed, in file order.
+
+    The 8-byte record header is a big-endian record number and content length.
+    The number is left out: it is always 1..n, so it can only say where a
+    record sits, and the order is already in the stream. The length is kept, as
+    a prefix, so two records can never run together into the same bytes as one.
+
+    File order is kept, not sorted, because the `.dbf` rows are matched to the
+    `.shp` records by position. Reordering the records alone re-pairs every
+    shape with different attributes, which is an edit.
+
+    The content is hashed as written — shape type, the record's own bounding
+    box, and the coordinates. The record box is computed from the coordinates,
+    so it adds nothing a re-save could move.
+    """
+
+    def stream() -> Iterator[bytes]:
+        with shp.open("rb") as handle:
+            handle.seek(_SHAPEFILE_HEADER_BYTES)
+            while header := handle.read(8):
+                if len(header) < 8:
+                    raise DatasetReadError(f"{shp} ends inside a record header")
+                _, words = struct.unpack(">ii", header)
+                length = words * 2
+                content = handle.read(length)
+                if words < 0 or len(content) != length:
+                    raise DatasetReadError(f"{shp} ends inside a record")
+                yield struct.pack("<I", length) + content
 
     return stream()
 
@@ -541,13 +630,7 @@ def _geopackage_attribute_chunks(
         if not feature_tables:
             return None
 
-        total = 0
-        for table in feature_tables:
-            count = _geopackage_count(connection, table)
-            if count is None:
-                return None
-            total += count
-        if total > max_rows:
+        if not _geopackage_within_rows(connection, feature_tables, max_rows):
             return None
 
         serialised: list[str] = []
@@ -576,6 +659,83 @@ def _geopackage_attribute_chunks(
 
     serialised.sort()
     return (line.encode("utf-8") + b"\n" for line in serialised)
+
+
+def _geopackage_geometry_chunks(
+    gpkg: pathlib.Path, *, max_rows: int
+) -> Iterator[bytes] | None:
+    """One digest per geometry value, sorted, each on its own line.
+
+    Sorted for the reason the attribute digest is: a rewrite that renumbers or
+    reorders rows is a re-save. Each row is reduced to a fixed 32-byte digest
+    first, so sorting costs 64 bytes a row rather than the geometry itself.
+
+    The known residual, which sorting creates and the attribute digest shares:
+    two features swapping geometries with nothing else changed is invisible,
+    because neither digest pairs a shape with its row.
+    """
+    with contextlib.closing(_open_geopackage(gpkg)) as connection:
+        feature_tables = _geopackage_feature_tables(connection)
+        if not feature_tables:
+            return None
+        if not _geopackage_within_rows(connection, feature_tables, max_rows):
+            return None
+
+        digests: list[str] = []
+        for table in feature_tables:
+            quoted_table = table.replace('"', '""')
+            for column in sorted(_geopackage_geometry_columns(connection, table)):
+                quoted_column = column.replace('"', '""')
+                rows = connection.execute(
+                    f'SELECT "{quoted_column}" FROM "{quoted_table}"'
+                )
+                for (value,) in rows:
+                    wkb = _gpkg_blob_wkb(value)
+                    if wkb is None:
+                        return None
+                    digest = hashlib.sha256()
+                    for part in (table.encode("utf-8"), column.encode("utf-8"), wkb):
+                        digest.update(part + b"\x00")
+                    digests.append(digest.hexdigest())
+
+    digests.sort()
+    return (line.encode("ascii") + b"\n" for line in digests)
+
+
+def _gpkg_blob_wkb(value: object) -> bytes | None:
+    """The WKB inside one GeoPackage geometry blob, or None if it cannot be trusted.
+
+    The header is dropped because it describes the geometry rather than being
+    it: the envelope is optional, and two writers holding the same coordinates
+    may include it or not.
+    """
+    if value is None:
+        return _NULL_GEOMETRY
+    if not isinstance(value, (bytes, bytearray, memoryview)):
+        return None
+    blob = bytes(value)
+    if len(blob) < _GPKG_BLOB_FIXED_BYTES or blob[:2] != _GPKG_BLOB_MAGIC:
+        return None
+    envelope = _GPKG_ENVELOPE_BYTES.get((blob[3] >> 1) & 0b111)
+    if envelope is None:
+        return None
+    wkb = blob[_GPKG_BLOB_FIXED_BYTES + envelope :]
+    if not wkb or wkb[0] != 1:  # 1 = little-endian (NDR)
+        return None
+    return wkb
+
+
+def _geopackage_within_rows(
+    connection: sqlite3.Connection, tables: Sequence[str], max_rows: int
+) -> bool:
+    """Whether every table can be counted and the total fits under `max_rows`."""
+    total = 0
+    for table in tables:
+        count = _geopackage_count(connection, table)
+        if count is None:
+            return False
+        total += count
+    return total <= max_rows
 
 
 def _geopackage_feature_tables(connection: sqlite3.Connection) -> list[str]:

@@ -58,6 +58,11 @@ concept DOI stays valid for every later release.
 | C8 | If available, link to developer documentation/manual | https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/blob/v0.1.0/README.md |
 | C9 | Support email for questions | aaryanupadhyay68@gmail.com |
 
+> **Keep the version strings consistent.** Every in-QGIS measurement in this repository
+> (`docs/capture_coverage.md`, README, C7 above) is from **QGIS 4.2.1**. If a manuscript
+> reports a run on a different build (for example 4.2.2), record that run and its version
+> in the repository too, or the paper and the code it cites will disagree on what was tested.
+
 ## Later releases
 
 1. Bump `version=` in `src/geoprovenance/metadata.txt`, plus `version` and `date-released`

@@ -25,17 +25,18 @@ deprecated=False
 # must be feature-detected at runtime, not assumed.
 #
 # qgisMinimumVersion was 3.34 (the LTS this project targets). Lowered to 3.28 on
-# 24 Aug 2026 as a TESTING ACCOMMODATION, not a change of target: the only QGIS
-# obtainable on the development machine is the Flathub LTS build, 3.28.9, and a
-# 3.34 floor stops it loading the plugin at all. Nothing here has been verified
-# against 3.34 itself.
+# 24 Aug 2026 so the Flathub 3.28.9 LTS build could load it — but that build
+# could NOT be installed (its end-of-life runtime fails to download from every
+# Flathub mirror), so no 3.x release has run this plugin. Every in-QGIS result
+# recorded in docs/capture_coverage.md is from QGIS 4.2.1. Nothing has been
+# verified against 3.28 or 3.34.
 #
-# Checked before lowering: the newest QGIS API this plugin touches is
-# QgsHistoryProviderRegistry and its entryAdded signal (capture/history_observer.py),
-# both introduced in QGIS 3.24 — so 3.28 is safe for the code as written.
+# The 3.28 floor is still safe for the code as written: the newest QGIS API this
+# plugin touches is QgsHistoryProviderRegistry and its entryAdded signal
+# (capture/history_observer.py), both introduced in QGIS 3.24.
 #
-# Raise this back to 3.34 once a 3.34+ build is available. Findings recorded in
-# docs/capture_coverage.md against 3.28.9 do not transfer to 3.34 unverified.
+# Raise this back to 3.34 once a 3.34+ build has been tested. Findings measured
+# on 4.2.1 do not transfer to 3.x unverified.
 #
 # qgisMaximumVersion is declared EXPLICITLY and must stay that way. When it is
 # absent QGIS does not mean "no ceiling" — it derives one, by taking the FIRST

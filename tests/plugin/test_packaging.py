@@ -328,10 +328,19 @@ def test_deploy_refuses_a_profile_other_than_the_dev_one():
         deploy.deploy("default")
 
 
-def test_deploy_knows_where_qgis_keeps_profiles():
+def test_deploy_knows_where_qgis_keeps_profiles(tmp_path, monkeypatch):
+    """Against a fake home, so it does not depend on QGIS being installed.
+
+    It used to read the real home directory, and so failed on any machine where
+    QGIS had never been started — including every CI runner. `deploy` refusing
+    to guess a profile directory is correct; the test was what assumed one.
+    """
     sys.path.insert(0, str(REPO_ROOT / "tools"))
     import deploy
 
-    target = deploy.target_dir(deploy.DEV_PROFILE)
+    monkeypatch.setattr(deploy.platform, "system", lambda: "Linux")
+    (tmp_path / ".local/share/QGIS/QGIS4/profiles").mkdir(parents=True)
+
+    target = deploy.target_dir(deploy.DEV_PROFILE, home=tmp_path)
     assert target.name == "plugins"
     assert "geoprov-dev" in str(target)

@@ -363,7 +363,7 @@ for the history channel, which records that a run happened but attaches no files
 a job is genuinely unconnected on the available evidence, and inventing a link would be
 a guess.
 
-### 5.4 Fingerprinting a file — one primary measurement, three complementary ones
+### 5.4 Fingerprinting a file — one primary measurement, four complementary ones
 
 **The question.** What did this file hold at the moment the job ran, in a form small
 enough to store and exact enough to compare later?
@@ -390,13 +390,14 @@ too**: rasters are the files that actually exceed the threshold, and with only t
 vector fields the digest collapses to a hash of the file size, making any two same-sized
 rasters identical.
 
-**The three complementary measurements**, taken alongside the primary one whenever the
+**The four complementary measurements**, taken alongside the primary one whenever the
 file can be read:
 
 | Name | What it covers | Survives | Moves when |
 |---|---|---|---|
 | `structure` | Field names, field types, CRS | A re-save | A column is added, renamed, retyped or reordered |
 | `geometry` | Feature count and bounding box | A re-save | Features are added, removed or moved |
+| `geometry_content` | The coordinates themselves: every `.shp` record, or every GeoPackage geometry with its header removed | A re-save | One point or vertex moves, even inside the extent |
 | `attributes` | The attribute values themselves | A re-save | One value in one row is edited |
 
 They are read straight off the raw bytes with `struct` and `sqlite3` — no QGIS, no GDAL
@@ -404,6 +405,16 @@ They are read straight off the raw bytes with `struct` and `sqlite3` — no QGIS
 bytes 36–67, the `.shx` carries the record count, the `.dbf` header carries the field
 names and types, and the `.prj` carries the coordinate system. A GeoPackage is a SQLite
 file, so `gpkg_contents` and `PRAGMA table_info` answer the same questions.
+
+`geometry_content` was added on 6 Oct 2026. Before that, `geometry` was the only shape
+signal, and it sees the count and the extent but not the coordinates. So one vertex
+moved inside the extent changed the bytes and nothing else, and the file read as
+`resaved` — a real edit reported as harmless. For a shoreline, a few features whose
+shape is the whole point, that is the edit that matters most. Its two limits are
+deliberate: a big-endian geometry, or one that is not a standard GeoPackage blob, gets
+no coordinate signal at all rather than a half-normalised one; and because GeoPackage
+rows are sorted before hashing (renumbering rows is a re-save), two features swapping
+shapes with nothing else changed is not seen.
 
 They are read from the path rather than from an open layer because the comparison
 happens long after capture, against whatever is on disk now, with nothing open in QGIS.
@@ -436,9 +447,9 @@ split them into moved and held. Then, most-structural first:
 | Verdict | When |
 |---|---|
 | `schema_changed` | The field list, types or CRS moved |
-| `geometry_changed` | The feature count or extent moved |
-| `attributes_changed` | Attribute values moved **and** geometry was checked and held |
-| `resaved` | The bytes moved **and** the attribute values were checked and held |
+| `geometry_changed` | The coordinates, the feature count or the extent moved |
+| `attributes_changed` | Attribute values moved **and** the coordinates were checked and held |
+| `resaved` | The bytes moved **and** the attribute values and the coordinates were checked and held |
 | `unchanged` | Nothing that could be compared moved |
 | `changed` | Something moved and there was not enough measured to say what |
 | `unknown` | Nothing could be compared at all |
@@ -450,12 +461,15 @@ GeoTIFF has no readable description here, so a GeoTIFF whose bytes moved comes b
 inferred from three signals that were never taken.
 
 The same discipline shows up in two conditions above. `resaved` requires the
-**attribute** signal to have held, not merely `structure` and `geometry` — a row can be
-edited without disturbing the column list or the extent, and concluding `resaved` from
-those two would hide a real edit. And `attributes_changed` is only claimed when the
-geometry was actually checked; without it, the honest answer is `changed`.
+**attribute** and **coordinate** signals to have held, not merely `structure` and
+`geometry` — a row can be edited, or a vertex moved, without disturbing the column list
+or the extent, and concluding `resaved` from those two would hide a real edit. And
+`attributes_changed` is only claimed when the coordinates were actually checked; without
+them, the honest answer is `changed`. One consequence: a record fingerprinted before
+6 Oct 2026 has no coordinate signal, so a re-save measured against it reads `changed`,
+not `resaved`. That is true — those records cannot tell a re-save from a moved vertex.
 
-Both measured failure cases are pinned as named tests in
+Both measured failure cases, and the moved vertex in both formats, are pinned as named tests in
 `tests/fingerprint/test_compare.py`, so neither can silently come back.
 
 ### 5.6 Working out which file came from which
@@ -626,7 +640,7 @@ bytes per workflow?).
 
 Owns the middle: turning raw rows into a standards-shaped record.
 
-- `fingerprint/hash.py` — the size-tiered fingerprint and the three complementary
+- `fingerprint/hash.py` — the size-tiered fingerprint and the four complementary
   measurements
 - `fingerprint/readers.py` — reading a dataset's shape off disk with `struct` and
   `sqlite3`
@@ -671,7 +685,7 @@ one has ever needed a live QGIS capture session to develop their own layer.
 
 ## 7. Where the work stands
 
-**523 tests pass** under `make test`, on a machine with no QGIS and no GIS stack
+**537 tests pass** under `make test`, on a machine with no QGIS and no GIS stack
 installed. Verified 31 August 2026.
 
 | Suite | Tests | Covers |
@@ -735,7 +749,7 @@ machine without QGIS and hides the no-QGIS-import violations on a machine with i
 
 | Command | What happens |
 |---|---|
-| `make test` | 523 tests, no QGIS needed, a few seconds |
+| `make test` | 537 tests, no QGIS needed, a few seconds |
 | `make demo1` | The Week 4 gate: QGIS ran a job and we wrote it down automatically |
 | `make demo2` | The Week 8 gate: a whole 4-step workflow captured in the right order, 6 of 6, under a second |
 | `make demo-workflow` | Capture, then the family tree, then a score of 100. Then one starting file is edited behind the software's back and the score falls to 89, **naming the file** |

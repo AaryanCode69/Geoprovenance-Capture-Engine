@@ -2,6 +2,11 @@
 
 Owner: Person B.  Research doc §4.3 Layer 3, §6.4.
 
+The `geometry_content` strategy was added by Person A on 6 Oct 2026 under an
+explicit written override of RULES.md §1.2 [HARD], requested by the user for
+this one fix (a pre-submission review flagged the vertex-edit blind spot). The
+override covers that fix only; Person B still owns this file.
+
     RULES.md §2.2 — standard library only: `hashlib`, `json`, `pathlib`, plus
     this package's own `readers`, which is standard library too.
     RULES.md §1.3 — this module computes; it never writes. The caller hands the
@@ -22,7 +27,7 @@ of these is produced for a dataset:
                     audit can report the weaker guarantee rather than imply
                     the stronger one.
 
-Three COMPLEMENTARY strategies, produced alongside the primary one whenever
+Four COMPLEMENTARY strategies, produced alongside the primary one whenever
 `readers.describe()` can read the file. These are not weaker substitutes for
 the byte hash; they answer a different question, and the answer only exists
 when they are compared against it:
@@ -31,6 +36,11 @@ when they are compared against it:
                     moves when a column is added, renamed, retyped or reordered.
     geometry        the feature count and bounding box. Survives a re-save;
                     moves when features are added, removed or relocated.
+    geometry_content
+                    the coordinates themselves — every .shp record, or every
+                    GeoPackage geometry with its blob header removed. Survives
+                    a re-save; moves when one vertex moves, which `geometry`
+                    cannot see when the count and the extent both hold.
     attributes      the attribute values themselves — for a Shapefile the .dbf,
                     which the byte hash of the .shp never touches. Survives a
                     re-save; moves when one value in one row is edited.
@@ -55,7 +65,7 @@ Why the complementary strategies exist at all
     ALONGSIDE the byte hash instead of instead of it, the same measurement
     stops being a weaker answer and becomes a second axis.
 
-The three are separate rows rather than one combined digest because a combined
+The four are separate rows rather than one combined digest because a combined
 digest would move whenever anything moved, which is the binary answer again.
 `fingerprints UNIQUE(entity_id, hash_strategy, computed_at)` is what lets them
 land together (docs/CONTRACT_schema.md, decision 4, v2).
@@ -91,6 +101,7 @@ STRATEGY_FILE = "file"
 STRATEGY_SCHEMA_SAMPLE = "schema_sample"
 STRATEGY_STRUCTURE = "structure"
 STRATEGY_GEOMETRY = "geometry"
+STRATEGY_GEOMETRY_CONTENT = "geometry_content"
 STRATEGY_ATTRIBUTES = "attributes"
 
 #: Exactly one of these is produced per dataset.
@@ -99,7 +110,12 @@ PRIMARY_STRATEGIES = frozenset({STRATEGY_FILE, STRATEGY_SCHEMA_SAMPLE})
 #: Produced in addition, when the file can be read. Each may be absent, and an
 #: absent signal compares as "unknown" rather than as "unchanged" (`compare.py`).
 COMPLEMENTARY_STRATEGIES = frozenset(
-    {STRATEGY_STRUCTURE, STRATEGY_GEOMETRY, STRATEGY_ATTRIBUTES}
+    {
+        STRATEGY_STRUCTURE,
+        STRATEGY_GEOMETRY,
+        STRATEGY_GEOMETRY_CONTENT,
+        STRATEGY_ATTRIBUTES,
+    }
 )
 
 KNOWN_STRATEGIES = PRIMARY_STRATEGIES | COMPLEMENTARY_STRATEGIES
@@ -361,11 +377,12 @@ def _stream_digest(algorithm: str, chunks: Iterable[bytes]) -> tuple[str, int]:
     return digest.hexdigest(), total
 
 
-#: Version tags for the three complementary digests. Bump one and every value
+#: Version tags for the four complementary digests. Bump one and every value
 #: it ever produced stops comparing equal — which is correct, and is why the
 #: tag is inside the payload.
 STRUCTURE_ALGORITHM = "geoprovenance/structure/1"
 GEOMETRY_ALGORITHM = "geoprovenance/geometry/1"
+GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/1"
 ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/1"
 
 
@@ -420,13 +437,36 @@ def complementary_fingerprints(
         ),
     ]
 
-    chunks = readers.attribute_chunks(path, max_rows=max_attribute_rows)
-    if chunks is not None:
-        digest, read_bytes = _stream_digest(ATTRIBUTES_ALGORITHM, chunks)
+    # `geometry_content` is a new strategy beside `geometry`, not a bumped
+    # GEOMETRY_ALGORITHM. The version tag is inside the hash, so bumping it would
+    # make every `geometry` row stored before this change read as moved — a false
+    # geometry_changed on every upgraded record. A new name is merely absent from
+    # old records, and an absent signal compares as unavailable (`compare.py`).
+    for strategy, algorithm, chunks in (
+        (
+            STRATEGY_GEOMETRY_CONTENT,
+            GEOMETRY_CONTENT_ALGORITHM,
+            readers.geometry_chunks(path, max_rows=max_attribute_rows),
+        ),
+        (
+            STRATEGY_ATTRIBUTES,
+            ATTRIBUTES_ALGORITHM,
+            readers.attribute_chunks(path, max_rows=max_attribute_rows),
+        ),
+    ):
+        if chunks is None:
+            continue
+        try:
+            digest, read_bytes = _stream_digest(algorithm, chunks)
+        except (OSError, readers.DatasetReadError):
+            # The chunks are read lazily, so a file truncated part-way through
+            # surfaces here rather than in `readers`. The signal is then simply
+            # not produced — unavailable, never a digest of half a file.
+            continue
         results.append(
             Fingerprint(
                 hash_value=digest,
-                hash_strategy=STRATEGY_ATTRIBUTES,
+                hash_strategy=strategy,
                 file_size_bytes=read_bytes,
                 feature_count=feature_count,
             )

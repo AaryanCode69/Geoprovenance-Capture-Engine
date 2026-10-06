@@ -309,3 +309,125 @@ def test_editing_one_value_moves_the_attribute_payload(geopackage: pathlib.Path)
     connection.commit()
     connection.close()
     assert b"".join(readers.attribute_chunks(geopackage)) != before
+
+
+# ===========================================================================
+# geometry payload — the coordinates themselves
+# ===========================================================================
+
+def _swap_first_two_shp_records(shp: pathlib.Path) -> None:
+    raw = bytearray(shp.read_bytes())
+    # Every point record is 8 bytes of header + 20 of content.
+    first, second = raw[108:128], raw[136:156]
+    raw[108:128], raw[136:156] = second, first
+    shp.write_bytes(bytes(raw))
+
+
+def test_the_shapefile_geometry_payload_keeps_record_order(shapefile: pathlib.Path):
+    """The `.dbf` rows pair with the `.shp` records by position.
+
+    Swapping two records leaves the same set of points but gives each one the
+    other's attributes, which is an edit — so, unlike the GeoPackage payload,
+    this one is not sorted.
+    """
+    before = b"".join(readers.geometry_chunks(shapefile))
+    _swap_first_two_shp_records(shapefile)
+    assert b"".join(readers.geometry_chunks(shapefile)) != before
+
+
+def test_the_shapefile_record_numbers_are_not_part_of_the_payload(
+    shapefile: pathlib.Path,
+):
+    """A record number says where a record sits; the order already says that."""
+    before = b"".join(readers.geometry_chunks(shapefile))
+    raw = bytearray(shapefile.read_bytes())
+    raw[100:104] = struct.pack(">i", 99)
+    shapefile.write_bytes(bytes(raw))
+    assert b"".join(readers.geometry_chunks(shapefile)) == before
+
+
+def test_a_truncated_shapefile_yields_no_coordinate_signal_and_does_not_raise(
+    shapefile: pathlib.Path,
+):
+    """The records are read lazily, so a short file fails part-way through.
+
+    `fingerprint_dataset` must still return — RULES.md §5.1 — and must simply
+    not produce the signal, rather than a digest of half a file.
+    """
+    from geoprovenance.fingerprint import (
+        STRATEGY_GEOMETRY_CONTENT,
+        fingerprint_dataset,
+    )
+
+    shapefile.write_bytes(shapefile.read_bytes()[:-5])
+    strategies = {f.hash_strategy for f in fingerprint_dataset(shapefile)}
+    assert STRATEGY_GEOMETRY_CONTENT not in strategies
+
+
+def test_the_geopackage_geometry_payload_is_row_order_independent(
+    geopackage: pathlib.Path,
+):
+    """Same reason as the attribute payload: renumbering rows is a re-save."""
+    before = b"".join(readers.geometry_chunks(geopackage))
+    connection = sqlite3.connect(geopackage)
+    rows = connection.execute(
+        "SELECT geom, name, category FROM sample_areas ORDER BY fid DESC"
+    ).fetchall()
+    connection.execute("DELETE FROM sample_areas")
+    connection.executemany(
+        "INSERT INTO sample_areas (geom, name, category) VALUES (?,?,?)", rows
+    )
+    connection.commit()
+    connection.close()
+    assert b"".join(readers.geometry_chunks(geopackage)) == before
+
+
+def _set_first_geometry(gpkg: pathlib.Path, value) -> None:
+    connection = sqlite3.connect(gpkg)
+    connection.execute("UPDATE sample_areas SET geom = ? WHERE fid = 1", (value,))
+    connection.commit()
+    connection.close()
+
+
+def test_clearing_a_geometry_moves_the_geometry_payload(geopackage: pathlib.Path):
+    before = b"".join(readers.geometry_chunks(geopackage))
+    _set_first_geometry(geopackage, None)
+    after = readers.geometry_chunks(geopackage)
+    assert after is not None, "a NULL geometry is a fact, not an unreadable file"
+    assert b"".join(after) != before
+
+
+def test_a_big_endian_geometry_yields_no_coordinate_signal(
+    geopackage: pathlib.Path,
+):
+    """Refused, not byte-swapped.
+
+    Normalising byte order here would mean writing a WKB parser, and a partial
+    one would read a re-save that switched byte order as a moved shape. Not
+    measuring is the honest answer; `compare` then reports the axis unavailable.
+    """
+    header = b"GP\x00\x00" + struct.pack(">i", 4326)
+    wkb = b"\x00" + struct.pack(">idd", 1, 77.5946, 12.9716)
+    _set_first_geometry(geopackage, header + wkb)
+    assert readers.geometry_chunks(geopackage) is None
+
+
+def test_a_geometry_that_is_not_a_geopackage_blob_yields_no_signal(
+    geopackage: pathlib.Path,
+):
+    _set_first_geometry(geopackage, b"\x01\x01\x00\x00\x00" + b"\x00" * 16)
+    assert readers.geometry_chunks(geopackage) is None
+
+
+def test_a_geopackage_over_the_row_ceiling_yields_no_geometry_signal(
+    geopackage: pathlib.Path,
+):
+    assert readers.geometry_chunks(geopackage, max_rows=1) is None
+    assert readers.geometry_chunks(geopackage, max_rows=4) is not None
+
+
+def test_an_unknown_format_yields_no_geometry_signal(tmp_path: pathlib.Path):
+    raster = tmp_path / "elevation.tif"
+    raster.write_bytes(b"II*\x00" + b"\x00" * 64)
+    assert readers.geometry_chunks(raster) is None
+    assert readers.geometry_chunks(None) is None

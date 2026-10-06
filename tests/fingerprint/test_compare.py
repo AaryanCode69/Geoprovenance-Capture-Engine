@@ -28,6 +28,7 @@ from geoprovenance.fingerprint import (
     STRATEGY_ATTRIBUTES,
     STRATEGY_FILE,
     STRATEGY_GEOMETRY,
+    STRATEGY_GEOMETRY_CONTENT,
     STRATEGY_STRUCTURE,
     compare_fingerprint_sets,
     fingerprint_dataset,
@@ -95,6 +96,7 @@ def test_a_geopackage_resaved_by_another_sqlite_build_is_not_a_change(
     assert comparison.held == {
         STRATEGY_STRUCTURE,
         STRATEGY_GEOMETRY,
+        STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_ATTRIBUTES,
     }
     assert comparison.changed is False
@@ -131,6 +133,100 @@ def test_editing_a_school_name_in_the_dbf_is_detected(shapefile: pathlib.Path):
     assert comparison.moved == {STRATEGY_ATTRIBUTES}
     assert STRATEGY_GEOMETRY in comparison.held
     assert comparison.changed is True
+
+
+# ===========================================================================
+# the third failure — a vertex moved inside the extent
+# ===========================================================================
+#
+# Until 6 Oct 2026 the only geometry signal was the feature count and the
+# bounding box. Moving one point or vertex without changing either moved the
+# byte hash and nothing else, so the file read as `resaved`: a real edit to the
+# shape reported as harmless. For a shoreline — a few features whose shape is
+# the whole point — that is not a corner case. A pre-submission review named
+# it; these two tests pin the fix on both formats.
+
+#: Where the fixture's first point sits: (77.5946, 12.9716). Inside the extent
+#: on both axes, so nudging it moves neither the count nor the bounding box.
+_NUDGE = 0.001
+
+
+def test_a_shapefile_point_moved_inside_the_extent_is_a_geometry_change(
+    shapefile: pathlib.Path,
+):
+    before = signals(shapefile)
+    raw = bytearray(shapefile.read_bytes())
+    # Record 1: 100-byte file header, 8-byte record header, 4-byte shape type.
+    (x,) = struct.unpack("<d", raw[112:120])
+    raw[112:120] = struct.pack("<d", x + _NUDGE)
+    shapefile.write_bytes(bytes(raw))
+    after = signals(shapefile)
+
+    assert before[STRATEGY_GEOMETRY] == after[STRATEGY_GEOMETRY], (
+        "count and extent must hold — that is what made this the hard case"
+    )
+    comparison = compare_fingerprint_sets(before, after)
+    assert comparison.verdict == VERDICT_GEOMETRY_CHANGED
+    assert STRATEGY_GEOMETRY_CONTENT in comparison.moved
+    assert comparison.changed is True
+
+
+def _rewrite_blob(gpkg: pathlib.Path, fid: int, change) -> None:
+    connection = sqlite3.connect(gpkg)
+    (blob,) = connection.execute(
+        "SELECT geom FROM sample_areas WHERE fid = ?", (fid,)
+    ).fetchone()
+    connection.execute(
+        "UPDATE sample_areas SET geom = ? WHERE fid = ?", (change(bytes(blob)), fid)
+    )
+    connection.commit()
+    connection.close()
+
+
+def test_a_geopackage_point_moved_inside_the_extent_is_a_geometry_change(
+    geopackage: pathlib.Path,
+):
+    def nudge(blob: bytes) -> bytes:
+        # 8-byte GeoPackage header (no envelope), then WKB: byte order, type, x.
+        (x,) = struct.unpack("<d", blob[13:21])
+        return blob[:13] + struct.pack("<d", x + _NUDGE) + blob[21:]
+
+    before = signals(geopackage)
+    _rewrite_blob(geopackage, 1, nudge)
+    after = signals(geopackage)
+
+    assert before[STRATEGY_GEOMETRY] == after[STRATEGY_GEOMETRY]
+    assert before[STRATEGY_ATTRIBUTES] == after[STRATEGY_ATTRIBUTES]
+    comparison = compare_fingerprint_sets(before, after)
+    assert comparison.verdict == VERDICT_GEOMETRY_CHANGED
+    assert STRATEGY_GEOMETRY_CONTENT in comparison.moved
+
+
+def test_a_writer_that_adds_an_envelope_has_not_moved_the_shape(
+    geopackage: pathlib.Path,
+):
+    """The fix must not reopen the false positive it sits beside.
+
+    A GeoPackage geometry may carry an optional bounding box in its header, and
+    whether it does is the writer's choice. Same coordinates, different header,
+    so different bytes: still a re-save.
+    """
+
+    def add_envelope(blob: bytes) -> bytes:
+        x, y = struct.unpack("<dd", blob[13:29])
+        flags = blob[3] | (1 << 1)  # envelope indicator 1: minx, maxx, miny, maxy
+        return (
+            blob[:3] + bytes([flags]) + blob[4:8]
+            + struct.pack("<4d", x, x, y, y) + blob[8:]
+        )
+
+    before = signals(geopackage)
+    _rewrite_blob(geopackage, 1, add_envelope)
+    after = signals(geopackage)
+
+    comparison = compare_fingerprint_sets(before, after)
+    assert STRATEGY_FILE in comparison.moved
+    assert comparison.verdict == VERDICT_RESAVED
 
 
 # ===========================================================================
@@ -214,6 +310,7 @@ def test_a_format_with_no_readable_description_degrades_to_changed(
     assert comparison.unavailable == {
         STRATEGY_STRUCTURE,
         STRATEGY_GEOMETRY,
+        STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_ATTRIBUTES,
     }
     assert "cannot say in what way" in comparison.explain()
@@ -241,6 +338,45 @@ def test_an_attribute_change_without_a_geometry_signal_is_only_changed():
         {STRATEGY_FILE: "b", STRATEGY_ATTRIBUTES: "y"},
     )
     assert comparison.verdict == VERDICT_CHANGED
+
+
+def test_count_and_extent_holding_does_not_prove_the_shapes_held():
+    """An attribute edit is only `attributes_changed` if the coordinates held.
+
+    `geometry` holding says the count and extent are as they were, and a vertex
+    can move without disturbing either. A record fingerprinted before
+    `geometry_content` existed has nothing more, so it gets the true answer.
+    """
+    before = {
+        STRATEGY_FILE: "a",
+        STRATEGY_STRUCTURE: "s",
+        STRATEGY_GEOMETRY: "g",
+        STRATEGY_ATTRIBUTES: "x",
+    }
+    after = dict(before, **{STRATEGY_FILE: "b", STRATEGY_ATTRIBUTES: "y"})
+    comparison = compare_fingerprint_sets(before, after)
+    assert comparison.verdict == VERDICT_CHANGED
+    assert STRATEGY_GEOMETRY_CONTENT in comparison.unavailable
+
+
+def test_a_record_from_before_the_coordinate_signal_is_not_called_resaved():
+    """Old records: bytes moved, attributes held, coordinates never measured.
+
+    Before 6 Oct 2026 this was `resaved`, and a moved vertex looked exactly
+    like it. Without the coordinate signal on both sides the two cannot be
+    told apart, so the answer is `changed` — and the explanation says why.
+    """
+    before = {
+        STRATEGY_FILE: "a",
+        STRATEGY_STRUCTURE: "s",
+        STRATEGY_GEOMETRY: "g",
+        STRATEGY_ATTRIBUTES: "x",
+    }
+    after = dict(before, **{STRATEGY_FILE: "b"}, **{STRATEGY_GEOMETRY_CONTENT: "c"})
+    comparison = compare_fingerprint_sets(before, after)
+    assert comparison.verdict == VERDICT_CHANGED
+    assert STRATEGY_GEOMETRY_CONTENT in comparison.unavailable
+    assert "could not be run" in comparison.explain()
 
 
 def test_nothing_in_common_is_unknown_not_unchanged():

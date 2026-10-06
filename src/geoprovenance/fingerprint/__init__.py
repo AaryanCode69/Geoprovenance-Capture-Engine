@@ -22,6 +22,7 @@ from .hash import (
     ATTRIBUTES_ALGORITHM,
     COMPLEMENTARY_STRATEGIES,
     GEOMETRY_ALGORITHM,
+    GEOMETRY_CONTENT_ALGORITHM,
     HASH_ALGORITHM,
     KNOWN_STRATEGIES,
     LARGE_FILE_THRESHOLD_BYTES,
@@ -29,6 +30,7 @@ from .hash import (
     STRATEGY_ATTRIBUTES,
     STRATEGY_FILE,
     STRATEGY_GEOMETRY,
+    STRATEGY_GEOMETRY_CONTENT,
     STRATEGY_SCHEMA_SAMPLE,
     STRATEGY_STRUCTURE,
     STRUCTURE_ALGORITHM,
@@ -45,6 +47,7 @@ from .readers import (
     DatasetReadError,
     LayerDescription,
     describe,
+    geometry_chunks,
     sidecar_paths,
 )
 
@@ -57,6 +60,7 @@ __all__ = [
     "Fingerprint",
     "FingerprintError",
     "GEOMETRY_ALGORITHM",
+    "GEOMETRY_CONTENT_ALGORITHM",
     "HASH_ALGORITHM",
     "KNOWN_STRATEGIES",
     "LARGE_FILE_THRESHOLD_BYTES",
@@ -65,6 +69,7 @@ __all__ = [
     "STRATEGY_ATTRIBUTES",
     "STRATEGY_FILE",
     "STRATEGY_GEOMETRY",
+    "STRATEGY_GEOMETRY_CONTENT",
     "STRATEGY_SCHEMA_SAMPLE",
     "STRATEGY_STRUCTURE",
     "STRUCTURE_ALGORITHM",
@@ -81,6 +86,7 @@ __all__ = [
     "describe",
     "fingerprint_dataset",
     "fingerprint_file",
+    "geometry_chunks",
     "sha256_file",
     "sidecar_paths",
 ]

@@ -2,6 +2,10 @@
 
 Owner: Person B.  Research doc §9.1 RQ3 — detection accuracy.
 
+The `geometry_content` rules were added by Person A on 6 Oct 2026 under an
+explicit written override of RULES.md §1.2 [HARD], requested by the user for
+this one fix. The override covers that fix only; Person B still owns this file.
+
     RULES.md §2.2 — standard library only.
     RULES.md §4.1 — imports no QGIS.
     RULES.md §5.6 — anything unresolvable becomes "unknown", never a guess.
@@ -14,13 +18,17 @@ Why this module has to exist
     fails to cover a Shapefile whose .dbf was edited, which is a serious one.
 
     `hash.py` records several measurements of one file at one instant — a byte
-    hash and up to three descriptions of the data's shape. Each on its own is
+    hash and up to four descriptions of the data's shape. Each on its own is
     still one bit. Read TOGETHER they separate the cases:
 
         bytes moved, everything else held        -> the file was re-saved
         attribute values moved, geometry held    -> same shapes, edited data
-        feature count or extent moved            -> the geometry changed
+        coordinates, feature count or extent moved -> the geometry changed
         field list or CRS moved                  -> the schema changed
+
+    "Geometry held" means the coordinates held (`geometry_content`), not only
+    the count and extent (`geometry`). Until 6 Oct 2026 only the second
+    existed, so one vertex moved inside the extent read as a re-save.
 
 What it refuses to do
     A signal that is missing on either side is reported as unavailable and
@@ -40,6 +48,7 @@ from .hash import (
     STRATEGY_ATTRIBUTES,
     STRATEGY_FILE,
     STRATEGY_GEOMETRY,
+    STRATEGY_GEOMETRY_CONTENT,
     STRATEGY_SCHEMA_SAMPLE,
     STRATEGY_STRUCTURE,
 )
@@ -58,7 +67,7 @@ VERDICT_RESAVED = "resaved"
 #: entirely, because the values live in the .dbf beside it.
 VERDICT_ATTRIBUTES_CHANGED = "attributes_changed"
 
-#: Feature count or extent moved.
+#: The coordinates, the feature count or the extent moved.
 VERDICT_GEOMETRY_CHANGED = "geometry_changed"
 
 #: The field list, field types or CRS moved.
@@ -84,8 +93,8 @@ _PLAIN_ENGLISH = {
         "to them was edited."
     ),
     VERDICT_GEOMETRY_CHANGED: (
-        "The shapes in this file changed — there are a different number of "
-        "them, or they cover a different area."
+        "The shapes in this file changed — they were moved, reshaped, added "
+        "or removed."
     ),
     VERDICT_SCHEMA_CHANGED: (
         "The columns in this file changed — one was added, removed, renamed "
@@ -178,14 +187,16 @@ def compare_fingerprint_sets(
     # and `moved` still carries the full set for a caller that wants it.
     if STRATEGY_STRUCTURE in moved:
         return result(VERDICT_SCHEMA_CHANGED)
-    if STRATEGY_GEOMETRY in moved:
+    if moved & {STRATEGY_GEOMETRY, STRATEGY_GEOMETRY_CONTENT}:
         return result(VERDICT_GEOMETRY_CHANGED)
 
     if STRATEGY_ATTRIBUTES in moved:
         # Only claim the shapes are untouched if the shapes were actually
-        # checked. Without a geometry signal on both sides this is just "it
-        # changed", which is true and is all that was measured.
-        if STRATEGY_GEOMETRY in held:
+        # checked — and the count and extent holding is not that check, since
+        # a vertex can move inside the extent. Without the coordinate signal on
+        # both sides this is just "it changed", which is true and is all that
+        # was measured. Records fingerprinted before 6 Oct 2026 land here.
+        if STRATEGY_GEOMETRY_CONTENT in held:
             return result(VERDICT_ATTRIBUTES_CHANGED)
         return result(VERDICT_CHANGED)
 
@@ -195,16 +206,17 @@ def compare_fingerprint_sets(
     # Bytes moved and nothing about the data did — but "nothing about the data
     # changed" is a claim about the VALUES, so it takes the signal that looks at
     # values. `structure` and `geometry` held only say the columns and the
-    # extent are as they were, and a row can be edited without disturbing
-    # either; concluding `resaved` from those two would be the same
-    # unmeasured-equals-unchanged mistake this module refuses everywhere else,
-    # in the direction that hides a real edit.
+    # extent are as they were, and a row can be edited — or a vertex moved —
+    # without disturbing either; concluding `resaved` from those two would be
+    # the same unmeasured-equals-unchanged mistake this module refuses
+    # everywhere else, in the direction that hides a real edit. So both value
+    # signals must have held: the attribute values and the coordinates.
     #
-    # In practice this only bites on a GeoPackage past the attribute row
-    # ceiling, which is exactly the case where we genuinely cannot tell a
-    # rewrite from an edit. `changed` is the true answer there, and `explain()`
-    # says that some checks could not be run.
+    # In practice this bites on a GeoPackage past the row ceiling, and on a
+    # record fingerprinted before `geometry_content` existed — exactly the
+    # cases where we genuinely cannot tell a rewrite from an edit. `changed` is
+    # the true answer there, and `explain()` says some checks could not be run.
     bytes_moved = moved & {STRATEGY_FILE, STRATEGY_SCHEMA_SAMPLE}
-    if bytes_moved and STRATEGY_ATTRIBUTES in held:
+    if bytes_moved and {STRATEGY_ATTRIBUTES, STRATEGY_GEOMETRY_CONTENT} <= held:
         return result(VERDICT_RESAVED)
     return result(VERDICT_CHANGED)

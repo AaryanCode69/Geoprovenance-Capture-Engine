@@ -1,0 +1,36 @@
+# The QGIS-free suite and the one-command demos, on every push and pull request.
+#
+# QGIS is not installed here, on purpose: everything below runs with the
+# standard library plus the dev dependencies (RULES.md §6.1). The in-QGIS tests
+# (`make test-qgis`) still have to be run by hand inside QGIS.
+#
+# 3.10 is the venv Python RULES.md §2.1 names; 3.13 is the interpreter bundled
+# with QGIS 4.2.1, the only QGIS this plugin has been measured on.
+
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Test suite (no QGIS)
+        run: make test PY=python
+      - name: Demos
+        run: |
+          make demo1 PY=python
+          make demo2 PY=python
+          make demo-workflow PY=python

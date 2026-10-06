@@ -2,6 +2,7 @@
 
 **Automatic provenance capture and reproducibility auditing for QGIS Processing workflows.**
 
+[![Tests](https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/actions/workflows/tests.yml/badge.svg)](https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/actions/workflows/tests.yml)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](./LICENSE)
 [![QGIS](https://img.shields.io/badge/QGIS-3.28%E2%80%934.x-589632.svg)](https://qgis.org)
 ![Version](https://img.shields.io/badge/version-0.1.0-informational.svg)
@@ -24,7 +25,7 @@ It needs no third-party Python packages, only the standard library and PyQGIS.
 
 - **Multi-channel automatic capture.** Four independent channels: a `processing.run()` wrapper, a Processing Toolbox wrapper, the QGIS history registry (with a polling fallback), and the Processing post-execution hook. A job seen by more than one channel is merged into a single record and marked as corroborated.
 - **Standards-based record.** Files, jobs and environments are stored as PROV entities, activities and agents. `used` / `wasGeneratedBy` / `wasDerivedFrom` relations are inferred automatically. The record exports to PROV-JSON.
-- **Change classification beyond checksums.** Shapefiles and GeoPackages get `structure`, `geometry` and `attributes` fingerprints alongside the byte hash. Two versions of a file can then be classified as `unchanged`, `resaved`, `attributes_changed`, `geometry_changed`, `schema_changed`, `changed` or `unknown`. Files larger than 500 MB fall back to a schema-and-sample fingerprint.
+- **Change classification beyond checksums.** Shapefiles and GeoPackages get `structure`, `geometry` (count and extent), `geometry_content` (the coordinates themselves) and `attributes` fingerprints alongside the byte hash, so a vertex moved inside the extent is a geometry change, not a re-save. Two versions of a file can then be classified as `unchanged`, `resaved`, `attributes_changed`, `geometry_changed`, `schema_changed`, `changed` or `unknown`. Files larger than 500 MB fall back to a schema-and-sample fingerprint.
 - **Workflow grouping.** Jobs in a QGIS session are grouped into workflows by the files they share, and put in order by start time. The plugin menu has items to start a new workflow and to name the current one; those two dialogs have not yet been tested by hand.
 - **Reproducibility audit.** A weighted 5-component score:
 
@@ -77,7 +78,7 @@ On QGIS 3.x, use `QGIS3` instead of `QGIS4` in the path. Then restart QGIS and o
 ## Quick start
 
 1. Enable the plugin. A **GeoProvenance** menu and dock panel appear.
-2. Run any Processing algorithm, from the Toolbox or from the Python console with `processing.run(...)`.
+2. Run any Processing algorithm. Scripted calls to `processing.run(...)` (for example from the Python console) are the path that has been measured live. Toolbox runs are captured by a separate wrapper that is unit-tested but has not yet been measured in a live session (see [`docs/capture_coverage.md`](./docs/capture_coverage.md)).
 3. Open the GeoProvenance dock. Pick the workflow to see its family tree of files, then open the audit tab to see its reproducibility score.
 
 The record is stored in `<QGIS profile>/geoprovenance/provenance.db`. You can change that location with the QSettings key `GeoProvenance/database_path`. A full walkthrough, including what each menu item does, is in [`docs/RUNNING_IN_QGIS.md`](./docs/RUNNING_IN_QGIS.md).
@@ -88,7 +89,7 @@ None of these need QGIS installed:
 
 ```bash
 make venv            # create .venv with the development dependencies
-make test            # the full test suite that runs without QGIS (523 tests)
+make test            # the full test suite that runs without QGIS (537 tests)
 make demo1           # one job captured automatically
 make demo2           # a 4-step workflow captured in order, nothing missing
 make demo-workflow   # family tree + reproducibility score; edits a file and shows the score drop

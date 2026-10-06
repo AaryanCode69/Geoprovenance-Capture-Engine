@@ -4,6 +4,35 @@ All notable changes to GeoProvenance are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0 the
 database shape and event format may still change between minor versions.
 
+## [Unreleased]
+
+### Fixed
+- **A vertex moved inside a dataset's extent was classified `resaved`.** The only
+  shape signal was feature count + bounding box, so moving one point or vertex
+  without changing either moved the byte hash alone. A fourth complementary
+  fingerprint, `geometry_content`, now digests the coordinates themselves: every
+  `.shp` record (record numbers excluded, file order kept), and every GeoPackage
+  geometry with its blob header removed (rows sorted, so renumbering is still a
+  re-save). Pinned for both formats in `tests/fingerprint/test_compare.py`.
+- `test_deploy_knows_where_qgis_keeps_profiles` read the real home directory and
+  failed on any machine where QGIS had never started; it now uses a fake home.
+
+### Changed
+- `resaved` now requires both the attribute and the coordinate signals to have held;
+  `attributes_changed` requires the coordinate signal to have held. Fingerprint sets
+  written by 0.1.0 have no coordinate signal, so a re-save or attribute edit compared
+  against them now reads `changed`. Re-fingerprinting the inputs removes this.
+- A captured file now leaves five fingerprint rows instead of four. No schema change.
+
+### Added
+- GitHub Actions CI running the QGIS-free suite and the workflow demo on Python
+  3.10 and 3.13.
+
+### Known limitations
+- A big-endian GeoPackage geometry, or one that is not a standard GeoPackage blob,
+  gets no coordinate signal (the comparison then says `changed`, not `resaved`).
+- Two GeoPackage features swapping geometries with nothing else changed is not seen.
+
 ## [0.1.0] — 2026-10-06
 
 First public release.

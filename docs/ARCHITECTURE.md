@@ -116,7 +116,7 @@ flowchart TB
 machine* — see the status column below. A **thick** outline means that part needs QGIS or
 its window toolkit actually running. Everything else works on plain Python dictionaries and
 asks an object what it can do rather than what it is, so it can be tested on a laptop with
-no GIS software installed at all. That is the reason 523 tests pass here while only the
+no GIS software installed at all. That is the reason 537 tests pass here while only the
 thin adapters at the edges remain unproven.
 
 ### What each box is
