@@ -1,0 +1,231 @@
+{
+  "perturbations": [
+    {
+      "perturbation": "P1 trial 1",
+      "expected_verdict": "resaved",
+      "actual_verdict": "resaved",
+      "matches_expected": true,
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file was saved again, but the data inside it is unchanged \u2014 the short code for the file moved while everything we can check about its contents stayed the same.",
+      "delta_epr_m_per_yr": 0.0,
+      "note": "bytes copied verbatim by ogr2ogr; rate not re-derived, so delta is 0 by construction"
+    },
+    {
+      "perturbation": "P1 trial 2",
+      "expected_verdict": "resaved",
+      "actual_verdict": "resaved",
+      "matches_expected": true,
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file was saved again, but the data inside it is unchanged \u2014 the short code for the file moved while everything we can check about its contents stayed the same.",
+      "delta_epr_m_per_yr": 0.0,
+      "note": "bytes copied verbatim by ogr2ogr; rate not re-derived, so delta is 0 by construction"
+    },
+    {
+      "perturbation": "P1 trial 3",
+      "expected_verdict": "resaved",
+      "actual_verdict": "resaved",
+      "matches_expected": true,
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file was saved again, but the data inside it is unchanged \u2014 the short code for the file moved while everything we can check about its contents stayed the same.",
+      "delta_epr_m_per_yr": 0.0,
+      "note": "bytes copied verbatim by ogr2ogr; rate not re-derived, so delta is 0 by construction"
+    },
+    {
+      "perturbation": "P4 trial 1",
+      "expected_verdict": "attributes_changed",
+      "actual_verdict": "attributes_changed",
+      "matches_expected": true,
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "structure"
+      ],
+      "explanation": "The shapes in this file are unchanged, but the information attached to them was edited.",
+      "edited_column": "is_water",
+      "edited_fid": 1027,
+      "old_value": 1,
+      "new_value": 2,
+      "geoscience_effect": "none - the distance/EPR steps join shorelines by nearest geometry only; this attribute is never read downstream"
+    },
+    {
+      "perturbation": "P4 trial 2",
+      "expected_verdict": "attributes_changed",
+      "actual_verdict": "attributes_changed",
+      "matches_expected": true,
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "structure"
+      ],
+      "explanation": "The shapes in this file are unchanged, but the information attached to them was edited.",
+      "edited_column": "is_water",
+      "edited_fid": 1027,
+      "old_value": 1,
+      "new_value": 2,
+      "geoscience_effect": "none - the distance/EPR steps join shorelines by nearest geometry only; this attribute is never read downstream"
+    },
+    {
+      "perturbation": "P4 trial 3",
+      "expected_verdict": "attributes_changed",
+      "actual_verdict": "attributes_changed",
+      "matches_expected": true,
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "structure"
+      ],
+      "explanation": "The shapes in this file are unchanged, but the information attached to them was edited.",
+      "edited_column": "is_water",
+      "edited_fid": 1027,
+      "old_value": 1,
+      "new_value": 2,
+      "geoscience_effect": "none - the distance/EPR steps join shorelines by nearest geometry only; this attribute is never read downstream"
+    },
+    {
+      "perturbation": "P5 trial 1",
+      "expected_verdict": "unchanged",
+      "actual_verdict": "unchanged",
+      "matches_expected": true,
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file is exactly as it was.",
+      "delta_epr_m_per_yr": 0.0
+    },
+    {
+      "perturbation": "P5 trial 2",
+      "expected_verdict": "unchanged",
+      "actual_verdict": "unchanged",
+      "matches_expected": true,
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file is exactly as it was.",
+      "delta_epr_m_per_yr": 0.0
+    },
+    {
+      "perturbation": "P5 trial 3",
+      "expected_verdict": "unchanged",
+      "actual_verdict": "unchanged",
+      "matches_expected": true,
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "structure"
+      ],
+      "explanation": "This file is exactly as it was.",
+      "delta_epr_m_per_yr": 0.0
+    },
+    {
+      "perturbation": "P2 (detection)",
+      "expected_verdict": "geometry_changed",
+      "actual_verdict": "geometry_changed",
+      "matches_expected": true,
+      "moved": [
+        "file",
+        "geometry"
+      ],
+      "held": [
+        "attributes",
+        "structure"
+      ],
+      "explanation": "The shapes in this file changed \u2014 there are a different number of them, or they cover a different area."
+    },
+    {
+      "perturbation": "P2 (geoscience effect)",
+      "matched_plausible_transects": 4147,
+      "mean_delta_epr_m_per_yr": -6.27964757656137,
+      "median_delta_epr_m_per_yr": -6.2735,
+      "max_abs_delta_epr_m_per_yr": 12.547,
+      "stdev_delta_epr_m_per_yr": 2.1818830459386693,
+      "reclassified_count": 3535,
+      "reclassified_pct": 85.24234386303351
+    }
+  ],
+  "baseline_summary": {
+    "total_rows_in_gpkg": 5213,
+    "plausible_transect_points": 5213,
+    "mean_epr_m_per_yr": 0.0131501438710915,
+    "median_epr_m_per_yr": 0.0,
+    "stdev_epr_m_per_yr": 2.015915481029643,
+    "min_epr_m_per_yr": -6.2741,
+    "max_epr_m_per_yr": 6.2741,
+    "classification_counts": {
+      "stable": 2352,
+      "accretion": 665,
+      "erosion": 724,
+      "strong erosion": 738,
+      "strong accretion": 734
+    },
+    "classification_pct": {
+      "stable": 45.1,
+      "accretion": 12.8,
+      "erosion": 13.9,
+      "strong erosion": 14.2,
+      "strong accretion": 14.1
+    }
+  },
+  "capture_summary": {
+    "jobs_recorded": 31,
+    "files_known": 36,
+    "relations": 132,
+    "by_algorithm": {
+      "gdal:cliprasterbyextent": 4,
+      "gdal:polygonize": 2,
+      "gdal:rastercalculator": 4,
+      "native:buffer": 1,
+      "native:densifygeometriesgivenaninterval": 1,
+      "native:extractbyattribute": 2,
+      "native:extractbyexpression": 3,
+      "native:extractvertices": 1,
+      "native:fieldcalculator": 4,
+      "native:fixgeometries": 2,
+      "native:joinbynearest": 2,
+      "native:mergevectorlayers": 1,
+      "native:polygonstolines": 3,
+      "native:transect": 1
+    },
+    "channel": "processing.run wrapper only (script-driven pipeline)",
+    "qgis_version": "4.2.2"
+  }
+}

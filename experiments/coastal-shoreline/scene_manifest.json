@@ -1,0 +1,44 @@
+{
+  "study_site": "Cuddalore coast, Tamil Nadu",
+  "aoi": {
+    "note": "search AOI used on EarthExplorer/Copernicus Browser; the actual analysis extent is narrowed further once the shoreline is extracted",
+    "north": "11°51'00\"N",
+    "south": "11°36'00\"N",
+    "east": "79°51'00\"E",
+    "west": "79°42'00\"E"
+  },
+  "scenes": [
+    {
+      "role": "baseline (older)",
+      "scene_id": "LC08_L2SP_142052_20150624_20200909_02_T1",
+      "sensor": "Landsat 8 OLI/TIRS",
+      "path_row": "142/052",
+      "date_acquired": "2015-06-24",
+      "scene_center_time_utc": "04:58:13.9251440Z",
+      "processing_level": "Collection 2, Level-2 (surface reflectance)",
+      "tier": "T1",
+      "cloud_cover_pct": 3.25,
+      "cloud_cover_land_pct": 2.49,
+      "bands_used": {"green": "SR_B3", "swir1": "SR_B6"},
+      "download_date": "2026-09-16",
+      "source": "USGS EarthExplorer"
+    },
+    {
+      "role": "recent",
+      "scene_id": "LC09_L2SP_142052_20260801_20260802_02_T1",
+      "sensor": "Landsat 9 OLI/TIRS-2",
+      "path_row": "142/052",
+      "date_acquired": "2026-08-01",
+      "scene_center_time_utc": "04:58:41.9231530Z",
+      "processing_level": "Collection 2, Level-2 (surface reflectance)",
+      "tier": "T1",
+      "cloud_cover_pct": 7.25,
+      "cloud_cover_land_pct": 0.35,
+      "bands_used": {"green": "SR_B3", "swir1": "SR_B6"},
+      "download_date": "2026-09-16",
+      "source": "USGS EarthExplorer"
+    }
+  ],
+  "separation_years": 11.06,
+  "note": "Two dates only — sufficient for EPR (End Point Rate). LRR (least-squares rate) needs a 3rd, intermediate-date scene, not yet acquired."
+}

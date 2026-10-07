@@ -39,8 +39,24 @@ demos/_scratch/
 experiments/data/
 *.tif
 *.tiff
+*.TIF
+*.TIFF
 *.jp2
 !tests/fixtures/data/**
+
+# Raw Landsat downloads (GB-scale tar bundles + extracted bands) and the
+# coastal-shoreline experiment's own generated rasters/vectors — regenerable
+# from the scene manifest, never committed.
+/dataset-cuddalore-coast/
+experiments/coastal-shoreline/data/*
+!experiments/coastal-shoreline/data/derived/
+experiments/coastal-shoreline/data/derived/*
+# Only the four layers the committed QGIS project opens; everything else is regenerable.
+!experiments/coastal-shoreline/data/derived/epr_classified.gpkg
+!experiments/coastal-shoreline/data/derived/epr_classified_p1test.gpkg
+!experiments/coastal-shoreline/data/derived/epr_classified_p1test2.gpkg
+!experiments/coastal-shoreline/data/derived/epr_classified_p4test.gpkg
+experiments/coastal-shoreline/_hooks/
 
 # Editor / OS / tooling
 .claude/
