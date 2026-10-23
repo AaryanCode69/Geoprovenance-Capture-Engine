@@ -5,3 +5,5 @@
 */data/*.tif
 */provenance*.db*
 */scratch/
+*.aux.xml
+*/hooks/
