@@ -476,3 +476,25 @@ def test_an_unknown_format_yields_no_geometry_signal(tmp_path: pathlib.Path):
     raster.write_bytes(b"II*\x00" + b"\x00" * 64)
     assert readers.geometry_chunks(raster) is None
     assert readers.geometry_chunks(None) is None
+
+
+def test_a_number_beyond_double_precision_is_the_number_it_rounds_to():
+    """E1 (24 Oct 2026): QGIS wrote 1309811.999999999767169 where GDAL wrote
+    1309812.000000000000000 for one double."""
+    assert readers._dbf_value("N", b" 1309812.000000000000000") == readers._dbf_value(
+        "N", b" 1309811.999999999767169")
+    assert readers._dbf_value("N", b"1309812.5") != readers._dbf_value("N", b"1309812.0")
+
+
+def test_a_geometry_column_declared_blob_or_by_type_is_one_structure(geopackage: pathlib.Path):
+    """E1 (24 Oct 2026): a writer may declare the geometry column BLOB or POINT."""
+    before = readers.describe(geopackage).structure_payload()
+    connection = sqlite3.connect(geopackage)
+    table, column = connection.execute(
+        "SELECT table_name, column_name FROM gpkg_geometry_columns").fetchone()
+    sql = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE name = ?", (table,)).fetchone()[0]
+    connection.close()
+    assert readers.describe(geopackage).structure_payload() == before
+    names = [l["field_types"] for l in before["layers"]][0]
+    assert any(t.startswith("GEOMETRY:") for t in names)

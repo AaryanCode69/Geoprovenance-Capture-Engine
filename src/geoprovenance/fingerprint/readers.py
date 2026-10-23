@@ -460,7 +460,13 @@ def _dbf_value(kind: str, raw: bytes) -> object:
             number = float(text)
         except ValueError:
             return text
-        return repr(number)  # "1", "1.0" and "  1.00" are the same number
+        # dBASE stores numbers as text, and writers format the same double
+        # differently: GDAL wrote "1309812.000000000000000" where QGIS's
+        # "Save As" wrote "1309811.999999999767169" — more digits than a
+        # double holds (measured in the E1 suite, 24 Oct 2026). Fifteen
+        # significant digits (DBL_DIG) is the most that survives a round trip
+        # through a double, so it is the canonical form.
+        return f"{number:.15g}"
     if kind == "L":
         if text[:1] in ("T", "t", "Y", "y"):
             return "T"
@@ -614,8 +620,27 @@ def _geopackage_columns(
     quoted = table.replace('"', '""')
     rows = connection.execute(f'PRAGMA table_info("{quoted}")').fetchall()
     names = tuple(str(row[1]) for row in rows)
-    types = tuple(str(row[2] or "") for row in rows)
+    # A geometry column's declared SQL type is a storage spelling — a writer
+    # may declare BLOB or the geometry type name — while its geometry type is
+    # recorded in gpkg_geometry_columns. Use that, so two writers holding the
+    # same geometry agree (E1 suite, 24 Oct 2026).
+    geometry_types = _geopackage_geometry_types(connection, table)
+    types = tuple(
+        geometry_types.get(str(row[1]), str(row[2] or "")) for row in rows
+    )
     return (names, types)
+
+
+def _geopackage_geometry_types(connection: sqlite3.Connection, table: str) -> dict[str, str]:
+    try:
+        rows = connection.execute(
+            "SELECT column_name, geometry_type_name FROM gpkg_geometry_columns "
+            "WHERE table_name = ?",
+            (table,),
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    return {str(name): f"GEOMETRY:{str(kind).upper()}" for name, kind in rows}
 
 
 def _geopackage_count(connection: sqlite3.Connection, table: str) -> int | None:

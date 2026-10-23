@@ -720,6 +720,6 @@ def test_the_digest_recipe_travels_inside_the_hash():
 
     payload = {"format": "Shapefile", "layers": []}
     assert _json_digest(STRUCTURE_ALGORITHM, payload) != _json_digest(
-        "geoprovenance/structure/2", payload
+        "geoprovenance/structure/999", payload
     )
     assert _stream_digest("a", [b"x"])[0] != _stream_digest("b", [b"x"])[0]

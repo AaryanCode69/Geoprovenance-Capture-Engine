@@ -213,3 +213,34 @@ def test_the_pixel_stream_does_not_depend_on_strip_or_tile_size(tmp_path):
         write_tiff(p, grid, **layout)
         digests.add(_set(p)[PIXELS])
     assert len(digests) == 1
+
+
+# ---------------------------------------------------------------------------
+# Found by the E1 development run (24 Oct 2026): storage details that leaked
+# ---------------------------------------------------------------------------
+
+def test_pixel_is_point_and_pixel_is_area_of_one_grid_are_one_structure(tmp_path, grid):
+    """QGIS rewrites a pixel-is-point Landsat file as pixel-is-area, moving the
+    origin half a pixel; the grid is the same."""
+    from _tiffwriter import write_tiff as w
+
+    point = tmp_path / "point.tif"
+    area = tmp_path / "area.tif"
+    w(point, grid, origin=(500015.0, 1299985.0))
+    raw = bytearray(point.read_bytes())
+    # flip GTRasterTypeGeoKey (1025) from 1 (area) to 2 (point) in place
+    needle = (1025).to_bytes(2, "little") + (0).to_bytes(2, "little") + (1).to_bytes(2, "little") + (1).to_bytes(2, "little")
+    i = raw.find(needle)
+    assert i > 0
+    raw[i + 6:i + 8] = (2).to_bytes(2, "little")
+    point.write_bytes(bytes(raw))
+    w(area, grid, origin=(500000.0, 1300000.0), compression=8)
+    assert compare.compare_fingerprint_sets(_set(point), _set(area)).verdict == compare.VERDICT_RESAVED
+
+
+def test_float32_nodata_spelled_with_different_precision_is_one_value(tmp_path):
+    grid = _grid(kind="f")
+    a, b = tmp_path / "a.tif", tmp_path / "b.tif"
+    write_tiff(a, grid, kind="f", bits=32, nodata="3.402823466e+38")
+    write_tiff(b, grid, kind="f", bits=32, nodata="3.4028234663852886e+38", compression=8)
+    assert compare.compare_fingerprint_sets(_set(a), _set(b)).verdict == compare.VERDICT_RESAVED

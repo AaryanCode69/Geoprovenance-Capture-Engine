@@ -390,17 +390,20 @@ def _stream_digest(algorithm: str, chunks: Iterable[bytes]) -> tuple[str, int]:
 #: Version tags for the four complementary digests. Bump one and every value
 #: it ever produced stops comparing equal — which is correct, and is why the
 #: tag is inside the payload.
-STRUCTURE_ALGORITHM = "geoprovenance/structure/1"
+STRUCTURE_ALGORITHM = "geoprovenance/structure/2"
 GEOMETRY_ALGORITHM = "geoprovenance/geometry/1"
-#: Both bumped to /2 on 24 Oct 2026 when the Shapefile payloads became
-#: order-insensitive (C1). Bumping, rather than adding a strategy name, is
+#: Bumped on 24 Oct 2026, first when the Shapefile payloads became
+#: order-insensitive (C1), then when the E1 development run showed four
+#: storage details leaking into the digests: GeoPackage geometry-column type
+#: spellings (structure/2), dBASE number formatting (attributes/3), and raster
+#: nodata spelling and pixel-is-point georeferencing (structure/raster/2). Bumping, rather than adding a strategy name, is
 #: safe only because v0.1.0 was never released: no record outside this
 #: repository's own regenerated fixtures carries a /1 value.
 GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/2"
-ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/2"
+ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/3"
 #: A raster's structure is a different payload from a vector's, so it carries
 #: its own tag: a raster and a vector can never produce comparable structures.
-RASTER_STRUCTURE_ALGORITHM = "geoprovenance/structure/raster/1"
+RASTER_STRUCTURE_ALGORITHM = "geoprovenance/structure/raster/2"
 PIXEL_CONTENT_ALGORITHM = "geoprovenance/pixel_content/1"
 
 

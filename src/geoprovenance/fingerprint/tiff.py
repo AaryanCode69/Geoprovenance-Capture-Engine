@@ -38,6 +38,7 @@ change a re-save (compare.py, "no silent agreement").
 from __future__ import annotations
 
 import array
+import math
 import pathlib
 import struct
 import sys
@@ -157,9 +158,49 @@ class RasterDescription:
             ]
         }
 
+    def area_geotransform(self) -> tuple[float, ...] | None:
+        """The geotransform for pixel-is-AREA, whatever the file declares.
+
+        A file may declare pixel-is-point (GTRasterTypeGeoKey = 2), anchoring
+        its tiepoint at a pixel centre; another writer converts the same grid
+        to pixel-is-area and moves the origin half a pixel to the corner.
+        Measured on Landsat Collection 2 files re-saved by QGIS (E1 suite,
+        24 Oct 2026). Both describe one grid, so the structure records the
+        area form — the conversion GDAL itself applies.
+        """
+        gt = self.geotransform
+        if gt is None:
+            return None
+        if dict(self.geokeys).get(_GT_RASTER_TYPE) == 2:
+            x0, dx, rx, y0, ry, dy = gt
+            return (x0 - 0.5 * dx - 0.5 * rx, dx, rx, y0 - 0.5 * ry - 0.5 * dy, ry, dy)
+        return gt
+
+    def canonical_nodata(self) -> str | None:
+        """Nodata as the sample type stores it, so spellings of one value agree.
+
+        "3.402823466e+38" and "3.4028234663852886e+38" are one float32 value
+        written with different precision (E1 suite, 24 Oct 2026).
+        """
+        if self.nodata is None:
+            return None
+        try:
+            value = float(self.nodata)
+        except ValueError:
+            return self.nodata
+        kind, bits = self.sample_format[0], self.bits[0]
+        if kind == 3 and bits == 32 and math.isfinite(value):
+            try:
+                value = struct.unpack("<f", struct.pack("<f", value))[0]
+            except OverflowError:
+                pass
+        elif kind in (1, 2) and math.isfinite(value) and value.is_integer():
+            return str(int(value))
+        return repr(value)
+
     def structure_payload(self) -> dict[str, object]:
         """What the raster holds and where it sits — never how it is stored."""
-        keys = dict(self.geokeys)
+        area = self.area_geotransform()
         return {
             "format": FORMAT_GEOTIFF,
             "width": self.width,
@@ -168,13 +209,8 @@ class RasterDescription:
             "bits": list(self.bits),
             "sample_format": list(self.sample_format),
             "crs": self.crs_payload(),
-            "raster_type": keys.get(_GT_RASTER_TYPE),
-            "geotransform": (
-                [round(v, _DECIMALS) for v in self.geotransform]
-                if self.geotransform is not None
-                else None
-            ),
-            "nodata": self.nodata,
+            "geotransform": [round(v, _DECIMALS) for v in area] if area is not None else None,
+            "nodata": self.canonical_nodata(),
         }
 
     @property

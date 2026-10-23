@@ -47,10 +47,10 @@ def _sources() -> dict[str, list[pathlib.Path]]:
     base = COAST / "run" / "baseline"
     return {
         "Shapefile": [ROOT / "tests/fixtures/data/sample_points.shp",
-                      WORK / "sources" / "transects.shp",
+                      WORK / "sources" / "transects_dense.shp",
                       WORK / "sources" / "water_polygons.shp"],
         "GeoPackage": [ROOT / "tests/fixtures/data/sample_areas.gpkg",
-                       base / "transects.gpkg",
+                       WORK / "sources" / "transects_dense.gpkg",
                        base / "2026_water_poly.gpkg"],
         "GeoTIFF": [COAST / "data" / "recent_B3.tif",
                     base / "2026_mndwi.tif",
@@ -59,13 +59,22 @@ def _sources() -> dict[str, list[pathlib.Path]]:
 
 
 def _prepare_sources() -> None:
-    """Shapefile versions of two coastal layers, made once, before any trial."""
+    """Sources made once, before any trial.
+
+    The transects are two-vertex lines, which have no interior vertex to move,
+    so the line sources are the transects densified every 100 m (ogr2ogr
+    -segmentize), in both formats. The development run used the raw
+    transects and could not run the vertex trials on them.
+    """
     out = WORK / "sources"
     out.mkdir(parents=True, exist_ok=True)
     base = COAST / "run" / "baseline"
-    for src, name in ((base / "transects.gpkg", "transects.shp"),
-                      (base / "2026_water_poly.gpkg", "water_polygons.shp")):
-        gdal.VectorTranslate(str(out / name), str(src), options=["-f", "ESRI Shapefile"])
+    gdal.VectorTranslate(str(out / "transects_dense.gpkg"), str(base / "transects.gpkg"),
+                         options=["-f", "GPKG", "-segmentize", "100", "-nln", "transects_dense"])
+    gdal.VectorTranslate(str(out / "transects_dense.shp"), str(out / "transects_dense.gpkg"),
+                         options=["-f", "ESRI Shapefile"])
+    gdal.VectorTranslate(str(out / "water_polygons.shp"), str(base / "2026_water_poly.gpkg"),
+                         options=["-f", "ESRI Shapefile"])
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +101,9 @@ def _driver(path: pathlib.Path) -> str:
 
 def _layer_name(path: pathlib.Path) -> str:
     ds = ogr.Open(str(path))
-    return ds.GetLayer(0).GetName()
+    name = ds.GetLayer(0).GetName()
+    ds = None
+    return name
 
 
 def _fingerprints(path: pathlib.Path) -> dict[str, str]:
@@ -110,7 +121,9 @@ def _classify(before: dict[str, str], path: pathlib.Path) -> tuple[str, list[str
 
 def _extent(path: pathlib.Path) -> tuple[float, ...]:
     ds = ogr.Open(str(path))
-    return tuple(round(v, 9) for v in ds.GetLayer(0).GetExtent())
+    extent = tuple(round(v, 9) for v in ds.GetLayer(0).GetExtent(force=1))
+    ds = None
+    return extent
 
 
 def _other_epsg(code: int) -> int:
@@ -119,9 +132,12 @@ def _other_epsg(code: int) -> int:
 
 def _epsg_of(path: pathlib.Path) -> int:
     if path.suffix.lower() == ".tif":
-        ref = osr.SpatialReference(wkt=gdal.Open(str(path)).GetProjection())
+        ds = gdal.Open(str(path))
+        ref = osr.SpatialReference(wkt=ds.GetProjection())
     else:
-        ref = ogr.Open(str(path)).GetLayer(0).GetSpatialRef()
+        ds = ogr.Open(str(path))
+        ref = ds.GetLayer(0).GetSpatialRef().Clone()
+    ds = None
     ref.AutoIdentifyEPSG()
     return int(ref.GetAuthorityCode(None))
 
@@ -169,8 +185,10 @@ def v_field_drop(path, rng):
 
 
 def v_field_retype(path, rng):
-    defn = ogr.Open(str(path)).GetLayer(0).GetLayerDefn()
+    ds = ogr.Open(str(path))
+    defn = ds.GetLayer(0).GetLayerDefn()
     kinds = {defn.GetFieldDefn(i).GetType() for i in range(defn.GetFieldCount())}
+    ds = None
     numeric = kinds & {ogr.OFTInteger, ogr.OFTInteger64, ogr.OFTReal}
     mapping = "Integer=String,Integer64=String,Real=String" if numeric else "String=Integer"
     tmp = path.with_name("retyped" + path.suffix)
@@ -439,7 +457,10 @@ def main() -> int:
                 runs = TRIALS if kind in RANDOMISED else 1
                 for fn in functions:
                     for trial in range(1, runs + 1):
-                        rng = random.Random(f"{fmt}/{s_index}/{kind}/{fn.__name__}/{trial}")
+                        # "final/": seeds distinct from the development run's,
+                        # so the reported trials are not the ones the four
+                        # canonicalisation fixes were diagnosed on.
+                        rng = random.Random(f"final/{fmt}/{s_index}/{kind}/{fn.__name__}/{trial}")
                         trial_dir = WORK / fmt / f"s{s_index}" / f"{kind}_{fn.__name__}_{trial}"
                         copy = _copy(source, trial_dir)
                         try:
