@@ -509,12 +509,20 @@ def install_toolbox_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], Non
     Degrades to a no-op when Processing's GUI is not importable — a headless
     QGIS has no Toolbox, and that is not an error.
     """
+    # QGIS 4 runs the Toolbox from processing/gui/algorithm_widget.py; QGIS
+    # 3.34 from processing/gui/AlgorithmDialog.py. Both import the two names
+    # this wraps (QgsProcessingAlgRunnerTask, execute) into their own module
+    # namespace, so the same wrapper serves both — feature detection (§2.5),
+    # found when the plugin first ran on QGIS 3.34.6 (24 Oct 2026).
     try:
         from processing.gui import algorithm_widget
-    except ImportError as exc:
-        log(f"Processing's Toolbox is not available, "
-            f"toolbox wrapper not installed: {exc}", WARNING)
-        return lambda: None
+    except ImportError:
+        try:
+            from processing.gui import AlgorithmDialog as algorithm_widget
+        except ImportError as exc:
+            log(f"Processing's Toolbox is not available, "
+                f"toolbox wrapper not installed: {exc}", WARNING)
+            return lambda: None
 
     restores: list[Callable[[], None]] = []
 
@@ -628,6 +636,57 @@ def _wrap_toolbox_execute(engine, algorithm_widget, restores: list) -> None:
 
 
 # ---------------------------------------------------------------------------
+# channel 5: the batch dialog (added 24 Oct 2026)
+# ---------------------------------------------------------------------------
+#
+# Measured on QGIS 4.2.3 in the E7 evaluation: a batch run reaches none of the
+# other four channels. It does not go through processing.run, nor through the
+# Toolbox's two branches (the C++ batch base class runs the rows itself), and
+# QGIS writes no history entry for it. Every batch row was invisible.
+#
+# The one Python surface every completed row passes through is
+# BatchAlgorithmDialog.handleAlgorithmResults(algorithm, context, feedback,
+# parameters), present with that signature on QGIS 3.34 and 4.2. It is called
+# AFTER the row has run, so this channel, like the history channel, records no
+# duration.
+
+BATCH_SOURCE = "batch"
+
+
+def install_batch_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]:
+    """Record each completed batch row. Returns the un-patch (§5.4)."""
+    try:
+        from processing.gui.BatchAlgorithmDialog import BatchAlgorithmDialog
+    except ImportError as exc:
+        log(f"Processing's batch dialog is not available, batch wrapper not installed: {exc}",
+            WARNING)
+        return lambda: None
+
+    original = getattr(BatchAlgorithmDialog, "handleAlgorithmResults", None)
+    if not callable(original):
+        log("BatchAlgorithmDialog.handleAlgorithmResults not found — batch runs "
+            "will not be captured", WARNING)
+        return lambda: None
+    if getattr(original, "_geoprovenance_wrapped", False):
+        return lambda: None
+
+    @functools.wraps(original)
+    def wrapper(self, algorithm, context, feedback, parameters, *args, **kwargs):
+        _observe(engine, algorithm, parameters, None, utc_now_iso(), "completed",
+                 source=BATCH_SOURCE, context="batch wrapper")
+        return original(self, algorithm, context, feedback, parameters, *args, **kwargs)
+
+    wrapper._geoprovenance_wrapped = True  # noqa: SLF001
+    BatchAlgorithmDialog.handleAlgorithmResults = wrapper
+    log("batch wrapper installed", INFO)
+
+    def restore() -> None:
+        BatchAlgorithmDialog.handleAlgorithmResults = original
+
+    return restore
+
+
+# ---------------------------------------------------------------------------
 
 def install_all(engine: ProvenanceCaptureEngine, hook_dir) -> list[tuple[str, Callable]]:
     """Install the hook channels. Returns (description, undo) pairs for §5.4.
@@ -644,4 +703,5 @@ def install_all(engine: ProvenanceCaptureEngine, hook_dir) -> list[tuple[str, Ca
         ("restore the post-execution hook setting", install_post_execution_hook(hook_dir)),
         ("un-patch processing.run", install_run_wrapper(engine)),
         ("un-patch the Processing Toolbox", install_toolbox_wrapper(engine)),
+        ("un-patch the batch dialog", install_batch_wrapper(engine)),
     ]

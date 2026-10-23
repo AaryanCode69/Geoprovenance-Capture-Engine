@@ -486,7 +486,11 @@ def dedup_parameters(event: dict, raw_parameters: Any = None) -> dict[str, Any]:
     event contains.
     """
     if isinstance(raw_parameters, dict):
-        return dict(raw_parameters)
+        # Flattened, because the channels do not hand over the same TYPES
+        # either: the Toolbox passes OUTPUT as a QgsProcessingOutputLayerDefinition
+        # where the history entry holds its plain sink path (measured on QGIS
+        # 4.2.3, E7), so every Toolbox job was written twice.
+        return flatten_parameters(raw_parameters)
 
     merged: dict[str, Any] = dict(event.get("parameters") or {})
     for entry in (event.get("inputs") or []) + (event.get("outputs") or []):

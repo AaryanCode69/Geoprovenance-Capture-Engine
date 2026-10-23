@@ -800,3 +800,42 @@ def test_a_failing_observer_never_breaks_capture(engine):
         raise RuntimeError("boom")
     engine.on_observed = explode
     assert run_buffer(engine).recorded
+
+
+def test_a_bracketing_channel_that_came_second_supplies_the_duration(engine, store):
+    """E7 (24 Oct 2026): history wins the Toolbox race but has no duration."""
+    engine.enrich = False
+    instant = "2026-10-24T10:00:05.000000+00:00"
+    first = engine.record_algorithm_execution(
+        algorithm_id="native:buffer", parameters=dict(BUFFER_PARAMS),
+        started_at=instant, ended_at=instant, source="history_signal")
+    second = engine.record_algorithm_execution(
+        algorithm_id="native:buffer", parameters=dict(BUFFER_PARAMS),
+        parameter_definitions=FakeAlgorithmDefinitions.BUFFER,
+        started_at="2026-10-24T10:00:01.000000+00:00", ended_at=instant, source="toolbox")
+    assert second.corroborated and second.activity_id == first.activity_id
+    row = store.get_activity(first.activity_id)
+    assert (row["started_at"], row["ended_at"]) == ("2026-10-24T10:00:01.000000+00:00", instant)
+
+
+def test_a_recorded_duration_is_never_replaced(engine, store):
+    engine.enrich = False
+    first = run_buffer(engine, source="run_wrapper")
+    before = store.get_activity(first.activity_id)
+    run_buffer(engine, source="post_hook")
+    after = store.get_activity(first.activity_id)
+    assert (after["started_at"], after["ended_at"]) == (before["started_at"], before["ended_at"])
+
+
+def test_a_long_toolbox_job_seen_by_history_first_is_still_one_job(engine, store):
+    """The history stamp follows the run; the Toolbox wrapper's start precedes it
+    by the whole runtime — 90 s here. Overlap, not start-inside, must match."""
+    engine.enrich = False
+    end = "2026-10-24T10:01:30.000000+00:00"
+    engine.record_algorithm_execution(algorithm_id="native:buffer", parameters=dict(BUFFER_PARAMS),
+                                      started_at=end, ended_at=end, source="history_signal")
+    result = engine.record_algorithm_execution(
+        algorithm_id="native:buffer", parameters=dict(BUFFER_PARAMS),
+        started_at="2026-10-24T10:00:00.000000+00:00", ended_at=end, source="toolbox")
+    assert result.corroborated
+    assert store.counts()["activities"] == 1

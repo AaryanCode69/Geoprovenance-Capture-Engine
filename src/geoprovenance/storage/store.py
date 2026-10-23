@@ -543,6 +543,13 @@ class ProvenanceStore:
             )
         )
 
+    def update_activity_interval(self, activity_id: str, started_at: str, ended_at: str) -> None:
+        """Replace a job's recorded interval (a better-measured one arrived)."""
+        self._write(
+            "UPDATE activities SET started_at = ?, ended_at = ? WHERE id = ?",
+            (started_at, ended_at, activity_id),
+        )
+
     def increment_corroboration(self, activity_id: str) -> int:
         """Record that the second channel also saw this execution (§5.9).
 

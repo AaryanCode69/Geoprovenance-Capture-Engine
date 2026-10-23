@@ -1,0 +1,132 @@
+{
+  "coastal_unchanged_offline": {
+    "score": 100.0,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 100.0,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {},
+    "steps": 49
+  },
+  "coastal_after_P1": {
+    "score": 100.0,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 100.0,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {},
+    "steps": 49
+  },
+  "coastal_after_P2": {
+    "score": 99.5,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 97.91666666666667,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {
+      "input_unchanged": [
+        "2026_shoreline.gpkg \u2014 The shapes in this file changed \u2014 they were moved, reshaped, added or removed."
+      ]
+    },
+    "steps": 49
+  },
+  "coastal_after_P3": {
+    "score": 99.5,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 97.91666666666667,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {
+      "input_unchanged": [
+        "recent_B3.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited."
+      ]
+    },
+    "steps": 49
+  },
+  "hydro_after_H2": {
+    "score": 96.9,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 87.5,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {
+      "input_unchanged": [
+        "dem_window.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited.",
+        "dem_window.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited."
+      ]
+    },
+    "steps": 16
+  },
+  "hydro_unchanged_offline": {
+    "score": 100.0,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 100.0,
+      "algorithm_available": 100.0,
+      "environment_similar": 100.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {},
+    "steps": 16
+  },
+  "_audit_host": {
+    "qgis": "unknown",
+    "python": "3.10.21"
+  },
+  "coastal_audited_on_qgis_3_34": {
+    "score": 85.0,
+    "band": "HIGH",
+    "components": {
+      "input_exists": 100.0,
+      "input_unchanged": 100.0,
+      "algorithm_available": 100.0,
+      "environment_similar": 0.0,
+      "parameters_valid": 100.0
+    },
+    "excluded": [],
+    "reasons": {
+      "environment_similar": [
+        "QGIS 4.2.3 then, QGIS 3.34.6 now; GDAL 3.13.3 then, GDAL 3.8.5 now; PROJ 9.9 then, PROJ 9.4 now; GEOS 3.14.1 then, GEOS 3.12.1 now; Python 3.14.9 then, Python 3.12.15 now",
+        "QGIS 4.2.3 then, QGIS 3.34.6 now; GDAL 3.13.3 then, GDAL 3.8.5 now; PROJ 9.9 then, PROJ 9.4 now; GEOS 3.14.1 then, GEOS 3.12.1 now; Python 3.14.9 then, Python 3.12.15 now",
+        "QGIS 4.2.3 then, QGIS 3.34.6 now; GDAL 3.13.3 then, GDAL 3.8.5 now; PROJ 9.9 then, PROJ 9.4 now; GEOS 3.14.1 then, GEOS 3.12.1 now; Python 3.14.9 then, Python 3.12.15 now"
+      ]
+    },
+    "steps": 49,
+    "audit_host": {
+      "qgis_version": "3.34.6",
+      "os_info": "Linux-7.2.11-1-cachyos-x86_64-with-glibc2.44",
+      "python_version": "3.12.15",
+      "gdal_version": "3.8.5",
+      "proj_version": "9.4",
+      "geos_version": "3.12.1",
+      "qgis_version_full": "3.34.6-Prizren"
+    }
+  }
+}

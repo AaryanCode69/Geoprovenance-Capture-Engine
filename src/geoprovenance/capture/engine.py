@@ -313,7 +313,7 @@ class ProvenanceCaptureEngine:
         key = normalizer.dedup_key(event["algorithm_id"], parameters, event["started_at"])
 
         # §5.9 — first channel wins. The second corroborates and does not insert.
-        existing = self._find_duplicate(group, event["started_at"])
+        existing = self._find_duplicate(group, event["started_at"], event.get("ended_at"))
         if existing is not None:
             return self._corroborate(existing, event)
 
@@ -335,8 +335,28 @@ class ProvenanceCaptureEngine:
         count = self.store.increment_corroboration(existing["id"])
         log(f"corroborated {event['algorithm_id']} via {event['source']} "
             f"(now {count})", INFO)
+        self._adopt_measured_interval(existing, event)
         self._observed(existing["id"], event.get("source"))
         return CaptureResult(activity_id=existing["id"], corroborated=True)
+
+    def _adopt_measured_interval(self, existing: dict, event: dict) -> None:
+        """Keep the measured duration when a bracketing channel came second.
+
+        The history channel stamps a job after it has finished, so its row has
+        started_at == ended_at. On the Toolbox it usually wins the race against
+        the Toolbox wrapper, which brackets the run and knows when it started
+        (measured in E7, 24 Oct 2026). When such a corroboration arrives, its
+        interval replaces the instant: same job, better-measured time.
+        """
+        try:
+            old_start, old_end = existing.get("started_at"), existing.get("ended_at")
+            new_start, new_end = event.get("started_at"), event.get("ended_at")
+            had_duration = old_end not in (None, old_start)
+            has_duration = new_start and new_end and new_end != new_start
+            if not had_duration and has_duration:
+                self.store.update_activity_interval(existing["id"], new_start, new_end)
+        except Exception as exc:  # noqa: BLE001 — §5.1
+            log_exception("adopting a measured interval", exc)
 
     # -- C6: is the post-execution hook live in this QGIS? ------------------
 
@@ -406,7 +426,8 @@ class ProvenanceCaptureEngine:
             log_exception("post-execution hook probe", exc)
             return None
 
-    def _find_duplicate(self, dedup_group: str, started_at: str) -> dict | None:
+    def _find_duplicate(self, dedup_group: str, started_at: str,
+                        ended_at: str | None = None) -> dict | None:
         """An activity already on file that IS this execution, or None (§5.9).
 
         A candidate shares the algorithm and the parameter digest; what decides
@@ -430,6 +451,15 @@ class ProvenanceCaptureEngine:
             # No usable timestamp, so no basis for the judgement. Recording a
             # possible duplicate beats discarding a real execution (§4.10).
             return None
+        # The observation is an interval too. Since 24 Oct 2026 the two
+        # intervals are matched by OVERLAP (each widened by the margin), not by
+        # the observation's start falling inside the record's interval: the
+        # Toolbox wrapper's start precedes the history channel's after-the-run
+        # stamp by the whole runtime, so start-inside-interval failed for any
+        # Toolbox job longer than the margin and recorded it twice (E7).
+        observed_end = _parse_timestamp(ended_at) or observed
+        if observed_end < observed:
+            observed_end = observed
 
         margin = dt.timedelta(seconds=DEDUP_MARGIN_S)
         for candidate in self.store.find_activities_by_dedup_group(dedup_group):
@@ -439,7 +469,7 @@ class ProvenanceCaptureEngine:
             end = _parse_timestamp(candidate.get("ended_at")) or start
             if end < start:
                 end = start
-            if start - margin <= observed <= end + margin:
+            if observed - margin <= end and observed_end + margin >= start:
                 return candidate
         return None
 

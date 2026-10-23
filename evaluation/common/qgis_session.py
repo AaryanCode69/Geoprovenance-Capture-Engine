@@ -53,7 +53,24 @@ def make_iface():
     window = QMainWindow()
     canvas = QgsMapCanvas(window)
     iface = QgisInterface(canvas, MockMessageBar(), window)
+    # The stub's layer tree is a MagicMock, which QGIS's own result handling
+    # (adding output layers to the project) rejects; give it a real one.
+    from qgis.core import QgsLayerTreeModel, QgsProject
+    from qgis.gui import QgsLayerTreeView
+
+    tree = QgsLayerTreeView(window)
+    tree.setModel(QgsLayerTreeModel(QgsProject.instance().layerTreeRoot(), tree))
+    iface.layerTreeView = lambda: tree
+    from qgis.gui import QgsBrowserGuiModel
+
+    browser = QgsBrowserGuiModel(window)
+    iface.browserModel = lambda: browser
     qgis.utils.iface = iface
+    # Processing modules did `from qgis.utils import iface` when they were
+    # imported, before this stub existed; point their copies at it too.
+    for name, module in list(sys.modules.items()):
+        if name.startswith("processing") and getattr(module, "iface", 0) is None:
+            module.iface = iface
     return iface
 
 
