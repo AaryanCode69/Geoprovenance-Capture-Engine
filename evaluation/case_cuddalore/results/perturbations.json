@@ -1,0 +1,400 @@
+{
+  "expected": {
+    "_note": "Hypotheses fixed before the perturbation runs (24 Oct 2026). Not edited after.",
+    "P1": "resaved",
+    "P2": "geometry_changed",
+    "P3": "pixels_changed",
+    "P4": "attributes_changed",
+    "P5": "unchanged"
+  },
+  "trials": [
+    {
+      "id": "P1",
+      "trial": 1,
+      "how": "ogr2ogr -f GPKG",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "resaved",
+      "verdict": "resaved",
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P1",
+      "trial": 2,
+      "how": "ogr2ogr -f GPKG -unsetFid -lco SPATIAL_INDEX=NO",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "resaved",
+      "verdict": "resaved",
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P1",
+      "trial": 3,
+      "how": "QgsVectorFileWriter.writeAsVectorFormatV3 (QGIS 'Save As')",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "resaved",
+      "verdict": "resaved",
+      "moved": [
+        "file"
+      ],
+      "held": [
+        "attributes",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P2",
+      "trial": 1,
+      "how": "MNDWI threshold t = 0.0 -> 0.02, 2026 chain re-run in QGIS",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "geometry_changed",
+      "verdict": "geometry_changed",
+      "moved": [
+        "attributes",
+        "file",
+        "geometry_content"
+      ],
+      "held": [
+        "geometry",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": false,
+        "mean_delta_epr": 0.08752369337979093,
+        "mean_abs_delta_epr": 0.08809163763066202,
+        "class_changed": 17,
+        "class_changed_pct": 5.923344947735192
+      }
+    },
+    {
+      "id": "P3",
+      "trial": 1,
+      "how": "2026 scene replaced by LC09_L2SP_142052_20250729_20250731_02_T1",
+      "target": "2026 green band (GeoTIFF)",
+      "expected": "pixels_changed",
+      "verdict": "pixels_changed",
+      "moved": [
+        "file",
+        "pixel_content"
+      ],
+      "held": [
+        "structure"
+      ],
+      "unavailable": [
+        "attributes",
+        "geometry",
+        "geometry_content"
+      ],
+      "effect": {
+        "transects_compared": 172,
+        "transects_baseline": 287,
+        "transects_other": 172,
+        "identical": false,
+        "mean_delta_epr": -1.952111046511628,
+        "mean_abs_delta_epr": 2.88619011627907,
+        "class_changed": 57,
+        "class_changed_pct": 33.13953488372093
+      }
+    },
+    {
+      "id": "P3",
+      "trial": 2,
+      "how": "2026 scene replaced by LC08_L2SP_142052_20250806_20250815_02_T1",
+      "target": "2026 green band (GeoTIFF)",
+      "expected": "pixels_changed",
+      "verdict": "pixels_changed",
+      "moved": [
+        "file",
+        "pixel_content"
+      ],
+      "held": [
+        "structure"
+      ],
+      "unavailable": [
+        "attributes",
+        "geometry",
+        "geometry_content"
+      ],
+      "effect": {
+        "transects_compared": 173,
+        "transects_baseline": 287,
+        "transects_other": 173,
+        "identical": false,
+        "mean_delta_epr": -1.8742450867052023,
+        "mean_abs_delta_epr": 3.4692381502890175,
+        "class_changed": 86,
+        "class_changed_pct": 49.71098265895954
+      }
+    },
+    {
+      "id": "P3",
+      "trial": 3,
+      "how": "2026 scene replaced by LC08_L2SP_142052_20240531_20240611_02_T1",
+      "target": "2026 green band (GeoTIFF)",
+      "expected": "pixels_changed",
+      "verdict": "pixels_changed",
+      "moved": [
+        "file",
+        "pixel_content"
+      ],
+      "held": [
+        "structure"
+      ],
+      "unavailable": [
+        "attributes",
+        "geometry",
+        "geometry_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": false,
+        "mean_delta_epr": 1.0387780487804879,
+        "mean_abs_delta_epr": 1.197130662020906,
+        "class_changed": 152,
+        "class_changed_pct": 52.961672473867594
+      }
+    },
+    {
+      "id": "P4",
+      "trial": 1,
+      "how": "source_scene edited on feature fid=1721",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "attributes_changed",
+      "verdict": "attributes_changed",
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P4",
+      "trial": 2,
+      "how": "source_scene edited on feature fid=1721",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "attributes_changed",
+      "verdict": "attributes_changed",
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P4",
+      "trial": 3,
+      "how": "source_scene edited on feature fid=1721",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "attributes_changed",
+      "verdict": "attributes_changed",
+      "moved": [
+        "attributes",
+        "file"
+      ],
+      "held": [
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P5",
+      "trial": 1,
+      "how": "byte-identical copy",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "unchanged",
+      "verdict": "unchanged",
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P5",
+      "trial": 2,
+      "how": "byte-identical copy",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "unchanged",
+      "verdict": "unchanged",
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    },
+    {
+      "id": "P5",
+      "trial": 3,
+      "how": "byte-identical copy",
+      "target": "2026 shoreline (GeoPackage)",
+      "expected": "unchanged",
+      "verdict": "unchanged",
+      "moved": [],
+      "held": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ],
+      "unavailable": [
+        "pixel_content"
+      ],
+      "effect": {
+        "transects_compared": 287,
+        "transects_baseline": 287,
+        "transects_other": 287,
+        "identical": true,
+        "mean_delta_epr": 0.0,
+        "mean_abs_delta_epr": 0.0,
+        "class_changed": 0,
+        "class_changed_pct": 0.0
+      }
+    }
+  ],
+  "years": 11.104950820345387
+}

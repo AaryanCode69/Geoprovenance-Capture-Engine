@@ -214,7 +214,8 @@ def _qgis_resave(src: pathlib.Path, dst: pathlib.Path) -> str:
     result = QgsVectorFileWriter.writeAsVectorFormatV3(
         layer, str(dst), QgsCoordinateTransformContext(), opts
     )
-    if result[0] != QgsVectorFileWriter.WriterError.NoError if hasattr(QgsVectorFileWriter, "WriterError") else result[0] != 0:
+    no_error = getattr(QgsVectorFileWriter, "WriterError", QgsVectorFileWriter).NoError
+    if result[0] != no_error:
         raise RuntimeError(f"QgsVectorFileWriter failed: {result}")
     return "QgsVectorFileWriter.writeAsVectorFormatV3 (QGIS 'Save As')"
 
@@ -262,6 +263,7 @@ def perturb() -> int:
     # P2 — re-threshold the 2026 water index, 0.0 -> 0.02, re-derived through
     # captured Processing calls.
     d = out_root / "P2_1"
+    d.mkdir()
     extent = aoi_extent()
     p2_shore = pathlib.Path(w.shoreline(
         d, "2026", str(DATA / s["recent"]["files"]["B3"]["path"]),
@@ -294,14 +296,17 @@ def perturb() -> int:
         d.mkdir()
         copy = d / "2026_shoreline.gpkg"
         shutil.copy2(shoreline_2026, copy)
-        conn = sqlite3.connect(copy)
-        table = conn.execute("SELECT table_name FROM gpkg_contents").fetchone()[0]
-        fids = [r[0] for r in conn.execute(f'SELECT fid FROM "{table}" ORDER BY fid')]
+        from osgeo import ogr
+
+        ds = ogr.Open(str(copy), 1)
+        layer = ds.GetLayer(0)
+        fids = sorted(f.GetFID() for f in layer)
         fid = fids[(k - 1) % len(fids)]
-        conn.execute(f'UPDATE "{table}" SET source_scene = ? WHERE fid = ?',
-                     (f"edited-{k}", fid))
-        conn.commit()
-        conn.close()
+        feature = layer.GetFeature(fid)
+        feature.SetField("source_scene", f"edited-{k}")
+        layer.SetFeature(feature)
+        feature = None
+        ds = None  # an attribute edit through GDAL, as an editing tool would make it
         record("P4", k, f"source_scene edited on feature fid={fid}",
                "2026 shoreline (GeoPackage)", _classify(recorded_shore, copy),
                _effect(baseline_epr, _rerun_rates(d / "rerun", copy, years)))
