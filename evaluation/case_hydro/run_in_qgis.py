@@ -30,6 +30,7 @@ import pathlib
 import shutil
 import sqlite3
 import sys
+import urllib.parse
 import urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -42,7 +43,7 @@ RUN = HERE / "run"
 RESULTS = HERE / "results"
 DB = HERE / "provenance.db"
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
-TOKEN_URL = "https://planetarycomputer.microsoft.com/api/sas/v1/token/cop-dem-glo-30"
+SIGN_URL = "https://planetarycomputer.microsoft.com/api/sas/v1/sign"
 ITEM = "Copernicus_DSM_COG_10_N11_00_E079_00_DEM"
 WINDOW_LONLAT = (79.00, 11.45, 79.85, 11.99)
 #: Approximate Gadilam river mouth at Cuddalore; the outlet is snapped to the
@@ -63,9 +64,9 @@ def download() -> dict:
 
     gdal.UseExceptions()
     DATA.mkdir(parents=True, exist_ok=True)
-    token = json.loads(_get(TOKEN_URL))["token"]
     item = json.loads(_get(f"{STAC}/collections/cop-dem-glo-30/items/{ITEM}"))
-    href = item["assets"]["data"]["href"] + "?" + token
+    raw = item["assets"]["data"]["href"]
+    href = json.loads(_get(f"{SIGN_URL}?href={urllib.parse.quote(raw, safe='')}"))["href"]
     out = DATA / "dem_window.tif"
     w, s, e, n = WINDOW_LONLAT
     gdal.Translate(str(out), "/vsicurl/" + href, projWin=[w, n, e, s])
@@ -179,7 +180,6 @@ def main() -> int:
     dem = DATA / "dem_window.tif"
     base = chain(RUN / "baseline", dem, threshold=STREAM_THRESHOLD)
     baseline = _measure(base)
-    from_db = __import__("case_cuddalore.run_in_qgis", fromlist=["record_summary"]) if False else None
     store = plugin.store
     trials = []
 
