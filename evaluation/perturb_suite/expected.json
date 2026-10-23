@@ -1,0 +1,16 @@
+{
+  "_note": "Expected verdict per perturbation type, fixed before the suite was run (24 Oct 2026). Manuscript Table 6. Not edited after.",
+  "resave": "resaved",
+  "attribute_edit": "attributes_changed",
+  "field_add": "schema_changed",
+  "field_drop": "schema_changed",
+  "field_retype": "schema_changed",
+  "crs_reassign": "schema_changed",
+  "feature_add": "geometry_changed",
+  "feature_delete": "geometry_changed",
+  "vertex_move": "geometry_changed",
+  "extent_edit": "geometry_changed",
+  "row_reorder": "resaved",
+  "pixel_edit": "pixels_changed",
+  "noop": "unchanged"
+}
