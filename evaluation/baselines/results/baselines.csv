@@ -1,0 +1,229 @@
+format,source,perturbation,variant,trial,expected,assigned,B1_sha256_file,B2_sha256_sidecars,B3_kart,B4_geodiff
+Shapefile,1,resave,v_resave_gdal,1,resaved,unchanged,unchanged,changed,unchanged,n/a
+Shapefile,1,resave,v_resave_qgis,1,resaved,unchanged,unchanged,changed,unchanged,n/a
+Shapefile,1,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,1,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,1,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,1,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,1,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,1,field_add,v_field_add,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_drop,v_field_drop,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_drop,v_field_drop,2,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_drop,v_field_drop,3,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_drop,v_field_drop,4,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_drop,v_field_drop,5,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,field_retype,v_field_retype,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,1,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,1,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,unchanged,n/a
+Shapefile,1,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,n/a
+Shapefile,2,resave,v_resave_gdal,1,resaved,unchanged,unchanged,unchanged,unchanged,n/a
+Shapefile,2,resave,v_resave_qgis,1,resaved,unchanged,unchanged,changed,geometry_changed,n/a
+Shapefile,2,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,2,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,2,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,2,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,2,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,2,field_add,v_field_add,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_drop,v_field_drop,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_drop,v_field_drop,2,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_drop,v_field_drop,3,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_drop,v_field_drop,4,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_drop,v_field_drop,5,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,field_retype,v_field_retype,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,2,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,2,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,unchanged,n/a
+Shapefile,2,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,n/a
+Shapefile,3,resave,v_resave_gdal,1,resaved,unchanged,unchanged,unchanged,unchanged,n/a
+Shapefile,3,resave,v_resave_qgis,1,resaved,unchanged,unchanged,changed,unchanged,n/a
+Shapefile,3,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,3,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,3,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,3,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,3,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,unchanged,changed,attributes_changed,n/a
+Shapefile,3,field_add,v_field_add,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_drop,v_field_drop,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_drop,v_field_drop,2,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_drop,v_field_drop,3,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_drop,v_field_drop,4,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_drop,v_field_drop,5,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,field_retype,v_field_retype,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,unchanged,changed,schema_changed,n/a
+Shapefile,3,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,n/a
+Shapefile,3,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,unchanged,n/a
+Shapefile,3,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,n/a
+GeoPackage,1,resave,v_resave_gdal,1,resaved,resaved,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,resave,v_resave_qgis,1,resaved,resaved,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,1,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,1,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,1,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,1,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,1,field_add,v_field_add,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_drop,v_field_drop,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_drop,v_field_drop,2,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_drop,v_field_drop,3,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_drop,v_field_drop,4,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_drop,v_field_drop,5,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,field_retype,v_field_retype,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,1,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,1,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,unchanged
+GeoPackage,2,resave,v_resave_gdal,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,2,resave,v_resave_qgis,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,2,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,2,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,2,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,2,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,2,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,2,field_add,v_field_add,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_drop,v_field_drop,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_drop,v_field_drop,2,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_drop,v_field_drop,3,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_drop,v_field_drop,4,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_drop,v_field_drop,5,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,field_retype,v_field_retype,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,2,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,2,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,2,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,unchanged
+GeoPackage,3,resave,v_resave_gdal,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,3,resave,v_resave_qgis,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,3,attribute_edit,v_attribute_edit,1,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,3,attribute_edit,v_attribute_edit,2,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,3,attribute_edit,v_attribute_edit,3,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,3,attribute_edit,v_attribute_edit,4,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,3,attribute_edit,v_attribute_edit,5,attributes_changed,attributes_changed,changed,changed,attributes_changed,attributes_changed
+GeoPackage,3,field_add,v_field_add,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_drop,v_field_drop,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_drop,v_field_drop,2,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_drop,v_field_drop,3,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_drop,v_field_drop,4,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_drop,v_field_drop,5,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,field_retype,v_field_retype,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,crs_reassign,v_crs_reassign,1,schema_changed,schema_changed,changed,changed,schema_changed,error: Error in createChangeset:
+GeoPackage,3,feature_add,v_feature_add,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_add,v_feature_add,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_add,v_feature_add,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_add,v_feature_add,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_add,v_feature_add,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_delete,v_feature_delete,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_delete,v_feature_delete,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_delete,v_feature_delete,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_delete,v_feature_delete,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,feature_delete,v_feature_delete,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,vertex_move,v_vertex_move,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,vertex_move,v_vertex_move,2,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,vertex_move,v_vertex_move,3,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,vertex_move,v_vertex_move,4,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,vertex_move,v_vertex_move,5,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,extent_edit,v_extent_edit,1,geometry_changed,geometry_changed,changed,changed,geometry_changed,geometry_changed
+GeoPackage,3,row_reorder,v_row_reorder,1,resaved,resaved,changed,changed,unchanged,unchanged
+GeoPackage,3,noop,noop,1,unchanged,unchanged,unchanged,unchanged,unchanged,unchanged
+GeoTIFF,1,resave,r_resave_deflate,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,1,resave,r_resave_bigtiff,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,1,resave,r_resave_qgis,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,1,pixel_edit,r_pixel_edit,1,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,1,pixel_edit,r_pixel_edit,2,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,1,pixel_edit,r_pixel_edit,3,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,1,pixel_edit,r_pixel_edit,4,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,1,pixel_edit,r_pixel_edit,5,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,1,crs_reassign,r_crs_reassign,1,schema_changed,schema_changed,changed,changed,n/a,n/a
+GeoTIFF,1,noop,noop,1,unchanged,unchanged,unchanged,unchanged,n/a,n/a
+GeoTIFF,2,resave,r_resave_deflate,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,2,resave,r_resave_bigtiff,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,2,resave,r_resave_qgis,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,2,pixel_edit,r_pixel_edit,1,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,2,pixel_edit,r_pixel_edit,2,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,2,pixel_edit,r_pixel_edit,3,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,2,pixel_edit,r_pixel_edit,4,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,2,pixel_edit,r_pixel_edit,5,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,2,crs_reassign,r_crs_reassign,1,schema_changed,schema_changed,changed,changed,n/a,n/a
+GeoTIFF,2,noop,noop,1,unchanged,unchanged,unchanged,unchanged,n/a,n/a
+GeoTIFF,3,resave,r_resave_deflate,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,3,resave,r_resave_bigtiff,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,3,resave,r_resave_qgis,1,resaved,resaved,changed,changed,n/a,n/a
+GeoTIFF,3,pixel_edit,r_pixel_edit,1,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,3,pixel_edit,r_pixel_edit,2,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,3,pixel_edit,r_pixel_edit,3,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,3,pixel_edit,r_pixel_edit,4,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,3,pixel_edit,r_pixel_edit,5,pixels_changed,pixels_changed,changed,changed,n/a,n/a
+GeoTIFF,3,crs_reassign,r_crs_reassign,1,schema_changed,schema_changed,changed,changed,n/a,n/a
+GeoTIFF,3,noop,noop,1,unchanged,unchanged,unchanged,unchanged,n/a,n/a
