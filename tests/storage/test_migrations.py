@@ -59,6 +59,37 @@ CREATE TABLE fingerprints (
 );
 
 CREATE INDEX idx_fingerprints_entity ON fingerprints (entity_id);
+
+-- agents and activities as they stood at v1 and v2. v3 (24 Oct 2026) adds
+-- columns to both, so the rebuilt v1 database has to carry them for the full
+-- v1 -> current path to be exercised.
+CREATE TABLE agents (
+    id                   TEXT PRIMARY KEY,
+    agent_type           TEXT NOT NULL,
+    label                TEXT,
+    qgis_version         TEXT,
+    os_info              TEXT,
+    python_version       TEXT,
+    plugin_versions_json TEXT,
+    created_at           TEXT NOT NULL,
+    env_fingerprint      TEXT UNIQUE
+);
+
+CREATE TABLE activities (
+    id              TEXT PRIMARY KEY,
+    algorithm_id    TEXT NOT NULL,
+    algorithm_name  TEXT,
+    provider        TEXT,
+    session_id      TEXT,
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT,
+    parameters_json TEXT NOT NULL DEFAULT '{}',
+    status          TEXT NOT NULL DEFAULT 'completed',
+    execution_log   TEXT,
+    capture_channel TEXT,
+    corroborations  INTEGER NOT NULL DEFAULT 0,
+    dedup_key       TEXT
+);
 """
 
 
@@ -112,7 +143,7 @@ def test_a_v1_database_migrates_to_the_current_version(v1_database):
         connection.commit()
     finally:
         connection.close()
-    assert migrations.CURRENT_VERSION == 2
+    assert migrations.CURRENT_VERSION == 3
 
 
 def test_the_migration_preserves_every_row_and_every_value(v1_database):
@@ -241,3 +272,49 @@ def test_a_database_from_the_future_is_refused_rather_than_read(v1_database):
     with pytest.raises(migrations.SchemaVersionError):
         migrations.apply_migrations(connection)
     connection.close()
+
+
+# ===========================================================================
+# v2 -> v3 (24 Oct 2026): additive columns and the registry snapshot table
+# ===========================================================================
+
+def test_v3_adds_the_library_versions_capabilities_and_snapshot_table(v1_database):
+    connection = sqlite3.connect(v1_database)
+    connection.execute(
+        "INSERT INTO agents (id, agent_type, qgis_version, created_at, env_fingerprint) "
+        "VALUES ('a1', 'software', '4.2.1', '2026-08-24T00:00:00+00:00', 'fp')"
+    )
+    connection.execute(
+        "INSERT INTO activities (id, algorithm_id, started_at) "
+        "VALUES ('x1', 'native:buffer', '2026-08-24T00:00:00+00:00')"
+    )
+    migrations.apply_migrations(connection)
+    connection.commit()
+    agent_columns = {r[1] for r in connection.execute("PRAGMA table_info(agents)")}
+    activity_columns = {r[1] for r in connection.execute("PRAGMA table_info(activities)")}
+    tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    old_agent = connection.execute("SELECT qgis_version, gdal_version FROM agents").fetchone()
+    connection.close()
+    assert {"gdal_version", "proj_version", "geos_version", "capabilities_json"} <= agent_columns
+    assert "parameter_definitions_json" in activity_columns
+    assert "registry_snapshots" in tables
+    # A row written before v3 keeps its values and simply lacks the new facts.
+    assert old_agent == ("4.2.1", None)
+
+
+def test_a_fresh_database_and_a_migrated_one_have_the_same_v3_columns(tmp_path, v1_database):
+    fresh = ProvenanceStore(tmp_path / "fresh.db")
+    fresh_cols = {
+        table: {r[1] for r in fresh._connection().execute(f"PRAGMA table_info({table})")}
+        for table in ("agents", "activities", "registry_snapshots")
+    }
+    fresh.close()
+    connection = sqlite3.connect(v1_database)
+    migrations.apply_migrations(connection)
+    connection.commit()
+    migrated_cols = {
+        table: {r[1] for r in connection.execute(f"PRAGMA table_info({table})")}
+        for table in ("agents", "activities", "registry_snapshots")
+    }
+    connection.close()
+    assert migrated_cols == fresh_cols

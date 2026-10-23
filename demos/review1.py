@@ -173,9 +173,10 @@ def main() -> int:
         # Four, not three, since 30 Aug 2026: read, made, ran-on — and then
         # "the second file came from the first", which the software now works
         # out for itself rather than being told. That fourth one is what a
-        # family tree is drawn from (RULES.md §7.9 — the demo moves with the
-        # code).
-        assert counts["relations"] == 4, "read, made, ran-on, came-from"
+        # family tree is drawn from. Five since 24 Oct 2026: "the file made
+        # was made on this computer" (wasAttributedTo, C3). RULES.md §7.9 —
+        # the demo moves with the code.
+        assert counts["relations"] == 5, "read, made, ran-on, came-from, made-on"
 
     with demo.step("Reading it back in plain English"):
         job = _only_activity(store, engine)

@@ -35,6 +35,11 @@ Person B's two passes (wired 30 Aug 2026)
     background thread or after-the-commit, and in-place edits are rare next to
     the cost of holding the write lock. See the note at `_fingerprint`.
 
+    Since 24 Oct 2026 (schema v3) a job also records the parameter definitions
+    it was run with (C9), every output is attributed to its environment with
+    `wasAttributedTo` (C3), and the engine remembers which channels saw each
+    job so the plugin can record whether the post-execution hook is live (C6).
+
     `enrich=False` turns both off. That is how §8.5's "attribute B's cost
     separately" gets measured: both passes run synchronously on the calling
     thread, so measure RQ2 with `enrich=False` as the baseline and report the
@@ -48,6 +53,7 @@ import json
 import os
 import sqlite3
 import threading
+import time
 import uuid
 from typing import Any
 
@@ -70,6 +76,35 @@ _ENTITY_METADATA_FIELDS = ("feature_count", "band_count", "pixel_size", "width",
 #: independent of how long the job took, so it does not have to be widened
 #: (and made wrong) to cover slow algorithms.
 DEDUP_MARGIN_S = 2.0
+
+#: C6 — how long after a job was first observed the post-execution hook has to
+#: report it before the hook is recorded as inactive. The hook runs inside
+#: Processing as the algorithm finishes, so on a QGIS where it is live it has
+#: reported long before this.
+HOOK_PROBE_WINDOW_S = 5.0
+
+
+def agent_kwargs(agent: dict | None) -> dict:
+    """The `get_or_create_agent` keyword arguments for one probe result.
+
+    "unknown" for a library is the absence of a fact, and must not split one
+    environment into two agent rows (§4.6), so it is passed as None.
+    """
+    agent = agent or {}
+
+    def known(name: str):
+        value = agent.get(name)
+        return None if value in (None, environment.UNKNOWN) else value
+
+    return dict(
+        qgis_version=agent.get("qgis_version"),
+        os_info=agent.get("os_info"),
+        python_version=agent.get("python_version"),
+        plugin_versions=agent.get("plugin_versions"),
+        gdal_version=known("gdal_version"),
+        proj_version=known("proj_version"),
+        geos_version=known("geos_version"),
+    )
 
 
 def _parse_timestamp(value: Any) -> "dt.datetime | None":
@@ -151,6 +186,22 @@ class ProvenanceCaptureEngine:
         #: alone — §8.5 [HARD] requires B's cost to be attributed separately,
         #: and the only way to do that honestly is to be able to run without it.
         self.enrich = enrich
+        #: C6 — which channels observed each activity this session, and which
+        #: environment it ran in. In memory only: it exists to answer "did the
+        #: post-execution hook fire for this job?", which needs no persistence
+        #: beyond the one capability fact it produces.
+        self._channels: dict[str, set[str]] = {}
+        self._activity_agent: dict[str, str] = {}
+        #: Called as on_observed(activity_id, channel) after every observation,
+        #: new or corroborating. plugin.py uses it to take the registry snapshot.
+        self.on_observed = None
+        #: Set by plugin.py once the hook installers have run: whether QGIS
+        #: accepted our post-execution script. None means "not told", and then
+        #: the probe records nothing rather than guessing.
+        self.hook_installed: bool | None = None
+        self.clock = time.monotonic
+        self._probe_candidate: tuple[str, float] | None = None
+        self._probe_done = False
 
     # -- singleton ---------------------------------------------------------
     #
@@ -223,14 +274,24 @@ class ProvenanceCaptureEngine:
             # The RAW parameter dict, before build_event split it. This is
             # the one form all three channels genuinely share, and §5.9 is
             # broken without it — see normalizer.dedup_parameters.
-            return self.record_event(event, raw_parameters=parameters)
+            return self.record_event(
+                event,
+                raw_parameters=parameters,
+                parameter_definitions=parameter_definitions,
+            )
         except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
             log_exception(f"capture failed for {algorithm_id}", exc)
             return CaptureResult(reason=f"{type(exc).__name__}: {exc}")
 
     # -- persistence -------------------------------------------------------
 
-    def record_event(self, event: dict, *, raw_parameters: Any = None) -> CaptureResult:
+    def record_event(
+        self,
+        event: dict,
+        *,
+        raw_parameters: Any = None,
+        parameter_definitions: dict[str, str] | None = None,
+    ) -> CaptureResult:
         """Write one event to the database.
 
         Raises on failure — the swallowing happens one level up in
@@ -257,7 +318,7 @@ class ProvenanceCaptureEngine:
             return self._corroborate(existing, event)
 
         try:
-            return self._insert_event(event, key)
+            return self._insert_event(event, key, parameter_definitions)
         except sqlite3.IntegrityError:
             # Another channel, on another thread, inserted between the lookup
             # above and this insert. The UNIQUE index on dedup_key is what
@@ -274,7 +335,76 @@ class ProvenanceCaptureEngine:
         count = self.store.increment_corroboration(existing["id"])
         log(f"corroborated {event['algorithm_id']} via {event['source']} "
             f"(now {count})", INFO)
+        self._observed(existing["id"], event.get("source"))
         return CaptureResult(activity_id=existing["id"], corroborated=True)
+
+    # -- C6: is the post-execution hook live in this QGIS? ------------------
+
+    def _observed(self, activity_id: str, channel: str | None) -> None:
+        self._channels.setdefault(activity_id, set()).add(channel or "unknown")
+        self._advance_hook_probe(activity_id)
+        callback = self.on_observed
+        if callback is not None:
+            try:
+                callback(activity_id, channel)
+            except Exception as exc:  # noqa: BLE001 — §5.1
+                log_exception("on_observed callback", exc)
+
+    def _advance_hook_probe(self, activity_id: str) -> None:
+        """Resolve the probe once a job has had HOOK_PROBE_WINDOW_S to be seen.
+
+        Driven by observations, not by a timer: capture can run on worker
+        threads, and a Qt timer started from one is a defect. The first job
+        becomes the candidate; the first observation at least the window later
+        settles it. `finish_hook_probe` settles a session that ends sooner.
+        """
+        if self._probe_done or self.hook_installed is None:
+            return
+        now = self.clock()
+        if self._probe_candidate is None:
+            self._probe_candidate = (activity_id, now)
+            return
+        candidate, started = self._probe_candidate
+        if now - started >= HOOK_PROBE_WINDOW_S:
+            self._probe_done = True
+            self.resolve_hook_probe(candidate, hook_installed=bool(self.hook_installed))
+
+    def finish_hook_probe(self) -> str | None:
+        """Settle a pending probe now — called when capture stops."""
+        if self._probe_done or self._probe_candidate is None or self.hook_installed is None:
+            return None
+        self._probe_done = True
+        return self.resolve_hook_probe(
+            self._probe_candidate[0], hook_installed=bool(self.hook_installed)
+        )
+
+    def channels_for(self, activity_id: str) -> frozenset[str]:
+        return frozenset(self._channels.get(activity_id, ()))
+
+    def resolve_hook_probe(self, activity_id: str, *, hook_installed: bool) -> str | None:
+        """Record whether the post-execution hook fired for a job. Never raises.
+
+        Called by plugin.py a few seconds after a job was first observed. The
+        hook reports through this same engine, so if it is live it has either
+        recorded the job itself or corroborated it by then. The answer is a
+        property of the QGIS build, stored once per environment in
+        `agents.capabilities_json` as "active", "inactive" or "not_installed".
+        """
+        try:
+            if not hook_installed:
+                state = "not_installed"
+            elif "post_hook" in self._channels.get(activity_id, ()):
+                state = "active"
+            else:
+                state = "inactive"
+            agent_id = self._activity_agent.get(activity_id)
+            if agent_id is not None:
+                self.store.set_agent_capability(agent_id, "post_execution_hook", state)
+            log(f"post-execution hook probe: {state}", INFO)
+            return state
+        except Exception as exc:  # noqa: BLE001 — §5.1
+            log_exception("post-execution hook probe", exc)
+            return None
 
     def _find_duplicate(self, dedup_group: str, started_at: str) -> dict | None:
         """An activity already on file that IS this execution, or None (§5.9).
@@ -313,7 +443,9 @@ class ProvenanceCaptureEngine:
                 return candidate
         return None
 
-    def _insert_event(self, event: dict, key: str) -> CaptureResult:
+    def _insert_event(
+        self, event: dict, key: str, parameter_definitions: dict | None = None
+    ) -> CaptureResult:
         """Write one new execution. §4.3 [HARD] — all of it, or none of it."""
         # §4.3 [HARD] — the activity, its datasets and all its relations land
         # together or not at all. The agent row is inside the boundary too:
@@ -334,6 +466,7 @@ class ProvenanceCaptureEngine:
                 execution_log=event.get("execution_log"),
                 capture_channel=event.get("source"),
                 dedup_key=key,
+                parameter_definitions=parameter_definitions,
             )
 
             touched: list[tuple[str, str]] = []  # (entity id, path) for B's pass
@@ -364,6 +497,19 @@ class ProvenanceCaptureEngine:
                     target_id=activity_id, role="output",
                     qgis_param_key=layer["param"],
                 )
+                # C3 — the fifth PROV relation. An output is attributed to the
+                # environment that produced it, so a PROV consumer can ask
+                # "which software stack made this file?" without walking
+                # through the job. Once per (file version, environment): a
+                # re-run that reuses the same entity adds no duplicate.
+                if not self.store.relation_exists(
+                    relation_type="wasAttributedTo",
+                    source_id=entity_id, target_id=agent_id,
+                ):
+                    self.store.add_relation(
+                        relation_type="wasAttributedTo",
+                        source_id=entity_id, target_id=agent_id,
+                    )
 
             self.store.add_relation(
                 relation_type="wasAssociatedWith",
@@ -375,6 +521,8 @@ class ProvenanceCaptureEngine:
         # execution in the session would point wasAssociatedWith at a row that
         # does not exist.
         self._agent_cache[cache_key] = agent_id
+        self._activity_agent[activity_id] = agent_id
+        self._observed(activity_id, event.get("source"))
 
         log(f"recorded {event['algorithm_id']} "
             f"({len(event.get('inputs') or [])} in, "
@@ -478,12 +626,7 @@ class ProvenanceCaptureEngine:
         if cached is not None:
             return cached, cache_key
 
-        agent_id = self.store.get_or_create_agent(
-            qgis_version=(agent or {}).get("qgis_version"),
-            os_info=(agent or {}).get("os_info"),
-            python_version=(agent or {}).get("python_version"),
-            plugin_versions=(agent or {}).get("plugin_versions"),
-        )
+        agent_id = self.store.get_or_create_agent(**agent_kwargs(agent))
         return agent_id, cache_key
 
     def _entity_for_input(self, layer: dict) -> str:

@@ -4,7 +4,9 @@ Owner: Person B.  Research doc §9.1 RQ3 — detection accuracy.
 
 The `geometry_content` rules were added by Person A on 6 Oct 2026 under an
 explicit written override of RULES.md §1.2 [HARD], requested by the user for
-this one fix. The override covers that fix only; Person B still owns this file.
+this one fix. The raster rules (`pixels_changed`, raster `resaved`) were added
+by Person A on 24 Oct 2026 under a second explicit written override for the
+Array manuscript (CLAIMS_TO_IMPLEMENT.md C7). Person B still owns this file.
 
     RULES.md §2.2 — standard library only.
     RULES.md §4.1 — imports no QGIS.
@@ -32,10 +34,10 @@ Why this module has to exist
 
 What it refuses to do
     A signal that is missing on either side is reported as unavailable and
-    takes no part in the verdict. It is never treated as "held". A GeoTIFF has
-    no readable description, so a GeoTIFF whose bytes moved comes back as
-    `changed` — today's answer, stated as today's answer, rather than a
-    confident `resaved` inferred from three signals that were never measured.
+    takes no part in the verdict. It is never treated as "held". A GeoTIFF
+    outside the decodable subset (`tiff.py`) has no pixel signal, so one whose
+    bytes moved comes back as `changed` — the honest answer — rather than a
+    confident `resaved` inferred from signals that were never measured.
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ from .hash import (
     STRATEGY_FILE,
     STRATEGY_GEOMETRY,
     STRATEGY_GEOMETRY_CONTENT,
+    STRATEGY_PIXEL_CONTENT,
     STRATEGY_SCHEMA_SAMPLE,
     STRATEGY_STRUCTURE,
 )
@@ -70,8 +73,12 @@ VERDICT_ATTRIBUTES_CHANGED = "attributes_changed"
 #: The coordinates, the feature count or the extent moved.
 VERDICT_GEOMETRY_CHANGED = "geometry_changed"
 
-#: The field list, field types or CRS moved.
+#: The field list, field types or CRS moved — for a raster, its grid, band
+#: count, sample type, CRS, geotransform or nodata value.
 VERDICT_SCHEMA_CHANGED = "schema_changed"
+
+#: A raster's decoded pixel values moved while its structure held.
+VERDICT_PIXELS_CHANGED = "pixels_changed"
 
 #: Something moved, and there was not enough measured to say what. The honest
 #: degradation to a plain same/different answer.
@@ -99,6 +106,10 @@ _PLAIN_ENGLISH = {
     VERDICT_SCHEMA_CHANGED: (
         "The columns in this file changed — one was added, removed, renamed "
         "or re-typed, or the map coordinates it uses are different."
+    ),
+    VERDICT_PIXELS_CHANGED: (
+        "The grid of this image is unchanged, but some of its cell values "
+        "were edited."
     ),
     VERDICT_CHANGED: (
         "This file is different from what was recorded, and we cannot say in "
@@ -135,6 +146,7 @@ class Comparison:
             VERDICT_ATTRIBUTES_CHANGED,
             VERDICT_GEOMETRY_CHANGED,
             VERDICT_SCHEMA_CHANGED,
+            VERDICT_PIXELS_CHANGED,
             VERDICT_CHANGED,
         )
 
@@ -189,6 +201,8 @@ def compare_fingerprint_sets(
         return result(VERDICT_SCHEMA_CHANGED)
     if moved & {STRATEGY_GEOMETRY, STRATEGY_GEOMETRY_CONTENT}:
         return result(VERDICT_GEOMETRY_CHANGED)
+    if STRATEGY_PIXEL_CONTENT in moved:
+        return result(VERDICT_PIXELS_CHANGED)
 
     if STRATEGY_ATTRIBUTES in moved:
         # Only claim the shapes are untouched if the shapes were actually
@@ -216,7 +230,17 @@ def compare_fingerprint_sets(
     # record fingerprinted before `geometry_content` existed — exactly the
     # cases where we genuinely cannot tell a rewrite from an edit. `changed` is
     # the true answer there, and `explain()` says some checks could not be run.
+    #
+    # The content axes depend on the kind of data: for a raster the pixel values
+    # ARE the data, for a vector the attribute values and coordinates are. A
+    # file is treated as a raster when either record carries a pixel signal.
+    is_raster = STRATEGY_PIXEL_CONTENT in (set(before) | set(after))
+    content = (
+        {STRATEGY_PIXEL_CONTENT}
+        if is_raster
+        else {STRATEGY_ATTRIBUTES, STRATEGY_GEOMETRY_CONTENT}
+    )
     bytes_moved = moved & {STRATEGY_FILE, STRATEGY_SCHEMA_SAMPLE}
-    if bytes_moved and {STRATEGY_ATTRIBUTES, STRATEGY_GEOMETRY_CONTENT} <= held:
+    if bytes_moved and content <= held:
         return result(VERDICT_RESAVED)
     return result(VERDICT_CHANGED)

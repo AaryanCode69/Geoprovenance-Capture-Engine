@@ -3,6 +3,9 @@
 Owner: Person B (README "Person B — Provenance Modeling, Fingerprinting & Export").
 Written by Person A under the explicit written override of RULES.md §1.2 [HARD]
 requested on 30 Aug 2026, so that the workflow panel could be demonstrated.
+The v3 agent fields and the wasAttributedTo export test were added by Person A
+on 24 Oct 2026 under a second explicit written override (Array manuscript,
+CLAIMS_TO_IMPLEMENT.md C2, C3).
 Person B owns this file; A owns nothing in it.
 
     THIS MODULE IMPORTS NO QGIS and no GDAL, for the same reason
@@ -299,6 +302,10 @@ def to_prov_json(graph: ProvGraph) -> dict[str, Any]:
                     f"{PREFIX}:qgisVersion": g["qgis_version"],
                     f"{PREFIX}:os": g["os_info"],
                     f"{PREFIX}:pythonVersion": g["python_version"],
+                    # v3 (24 Oct 2026, C2) — absent on rows written before it.
+                    f"{PREFIX}:gdalVersion": g.get("gdal_version"),
+                    f"{PREFIX}:projVersion": g.get("proj_version"),
+                    f"{PREFIX}:geosVersion": g.get("geos_version"),
                 }
             )
             for g in graph.agents

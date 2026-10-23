@@ -5,7 +5,10 @@ Owner: Person B.  Research doc §4.3 Layer 3, §6.4.
 The `geometry_content` strategy was added by Person A on 6 Oct 2026 under an
 explicit written override of RULES.md §1.2 [HARD], requested by the user for
 this one fix (a pre-submission review flagged the vertex-edit blind spot). The
-override covers that fix only; Person B still owns this file.
+raster `structure` payload and the `pixel_content` strategy were added by
+Person A on 24 Oct 2026 under a second explicit written override, requested by
+the user for the Array manuscript (CLAIMS_TO_IMPLEMENT.md C7, C1). Person B
+still owns this file.
 
     RULES.md §2.2 — standard library only: `hashlib`, `json`, `pathlib`, plus
     this package's own `readers`, which is standard library too.
@@ -41,9 +44,12 @@ when they are compared against it:
                     GeoPackage geometry with its blob header removed. Survives
                     a re-save; moves when one vertex moves, which `geometry`
                     cannot see when the count and the extent both hold.
-    attributes      the attribute values themselves — for a Shapefile the .dbf,
-                    which the byte hash of the .shp never touches. Survives a
-                    re-save; moves when one value in one row is edited.
+    attributes      the attribute values themselves — for a Shapefile the .dbf
+                    rows, which the byte hash of the .shp never touches; rows
+                    are canonicalised and sorted. Survives a re-save or a row
+                    reorder; moves when one value in one row is edited.
+    pixel_content   a GeoTIFF's decoded samples (`tiff.py`); with a raster
+                    `structure` payload, the raster counterparts of the above.
 
 Why the complementary strategies exist at all
     A byte hash gives a same/different answer, and it is wrong in both
@@ -80,10 +86,11 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import zlib
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
-from . import readers
+from . import readers, tiff
 
 #: Written into `fingerprints.hash_algorithm`. The column defaults to this too.
 HASH_ALGORITHM = "SHA-256"
@@ -103,6 +110,8 @@ STRATEGY_STRUCTURE = "structure"
 STRATEGY_GEOMETRY = "geometry"
 STRATEGY_GEOMETRY_CONTENT = "geometry_content"
 STRATEGY_ATTRIBUTES = "attributes"
+#: Every decoded sample of a GeoTIFF's full-resolution image (`tiff.py`).
+STRATEGY_PIXEL_CONTENT = "pixel_content"
 
 #: Exactly one of these is produced per dataset.
 PRIMARY_STRATEGIES = frozenset({STRATEGY_FILE, STRATEGY_SCHEMA_SAMPLE})
@@ -115,6 +124,7 @@ COMPLEMENTARY_STRATEGIES = frozenset(
         STRATEGY_GEOMETRY,
         STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_ATTRIBUTES,
+        STRATEGY_PIXEL_CONTENT,
     }
 )
 
@@ -382,8 +392,16 @@ def _stream_digest(algorithm: str, chunks: Iterable[bytes]) -> tuple[str, int]:
 #: tag is inside the payload.
 STRUCTURE_ALGORITHM = "geoprovenance/structure/1"
 GEOMETRY_ALGORITHM = "geoprovenance/geometry/1"
-GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/1"
-ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/1"
+#: Both bumped to /2 on 24 Oct 2026 when the Shapefile payloads became
+#: order-insensitive (C1). Bumping, rather than adding a strategy name, is
+#: safe only because v0.1.0 was never released: no record outside this
+#: repository's own regenerated fixtures carries a /1 value.
+GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/2"
+ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/2"
+#: A raster's structure is a different payload from a vector's, so it carries
+#: its own tag: a raster and a vector can never produce comparable structures.
+RASTER_STRUCTURE_ALGORITHM = "geoprovenance/structure/raster/1"
+PIXEL_CONTENT_ALGORITHM = "geoprovenance/pixel_content/1"
 
 
 def _total_feature_count(description: readers.DatasetDescription) -> int | None:
@@ -413,6 +431,8 @@ def complementary_fingerprints(
     range, and recording a size against them would imply a coverage they do
     not have.
     """
+    if tiff.is_tiff_path(path):
+        return _raster_fingerprints(path)
     description = description if description is not None else readers.describe(path)
     if description is None:
         return []
@@ -474,6 +494,42 @@ def complementary_fingerprints(
     return results
 
 
+def _raster_fingerprints(path: str | pathlib.Path) -> list[Fingerprint]:
+    """`structure` and `pixel_content` for a GeoTIFF; empty if it cannot be read.
+
+    The structure signal needs only the first IFD, so it is produced even for a
+    TIFF whose compression is outside the supported subset — a CRS reassigned
+    on an LZW file is still a schema change. The pixel signal is produced only
+    inside the subset; outside it the axis is simply absent (`tiff.py`).
+    """
+    raster = tiff.describe(path)
+    if raster is None:
+        return []
+    results = [
+        Fingerprint(
+            hash_value=_json_digest(
+                RASTER_STRUCTURE_ALGORITHM, raster.structure_payload()
+            ),
+            hash_strategy=STRATEGY_STRUCTURE,
+            file_size_bytes=None,
+        )
+    ]
+    chunks = tiff.pixel_chunks(path, raster)
+    if chunks is not None:
+        try:
+            digest, read_bytes = _stream_digest(PIXEL_CONTENT_ALGORITHM, chunks)
+        except (OSError, tiff.TiffReadError, zlib.error):
+            return results
+        results.append(
+            Fingerprint(
+                hash_value=digest,
+                hash_strategy=STRATEGY_PIXEL_CONTENT,
+                file_size_bytes=read_bytes,
+            )
+        )
+    return results
+
+
 def fingerprint_dataset(
     path: str | pathlib.Path,
     *,
@@ -509,6 +565,16 @@ def fingerprint_dataset(
     nothing — neither the caller nor the reader — can describe.
     """
     description = readers.describe(path)
+
+    raster = tiff.describe(path) if tiff.is_tiff_path(path) else None
+    if raster is not None:
+        # The §6.4 fallback for a raster over the threshold needs its grid,
+        # which the capture event may not carry. Read off the file instead.
+        band_count = band_count if band_count is not None else raster.bands
+        width = width if width is not None else raster.width
+        height = height if height is not None else raster.height
+        if pixel_size is None and raster.pixel_size is not None:
+            pixel_size = raster.pixel_size
 
     if description is not None:
         first = description.layers[0] if description.layers else None

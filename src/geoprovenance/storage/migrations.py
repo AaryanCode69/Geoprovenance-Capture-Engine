@@ -24,7 +24,7 @@ from __future__ import annotations
 import sqlite3
 
 #: Keep in sync with ``PRAGMA user_version`` at the top of schema.sql.
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 #: version -> SQL statements taking the database from (version - 1) to version.
 #: v1 is the baseline and is created directly from schema.sql, so it is empty.
@@ -85,6 +85,26 @@ MIGRATIONS: dict[int, list[str]] = {
         "DROP TABLE fingerprints",
         "ALTER TABLE fingerprints_v2 RENAME TO fingerprints",
         "CREATE INDEX IF NOT EXISTS idx_fingerprints_entity ON fingerprints (entity_id)",
+    ],
+    # v3 (24 Oct 2026) — additive only: library versions and runtime
+    # capabilities on agents (C2, C6), captured parameter definitions on
+    # activities and a registry snapshot table (C9). Every new column is
+    # nullable, so rows written at v2 stay valid and simply lack the new facts;
+    # the audit treats a missing fact as "not evaluable", never as a pass.
+    3: [
+        "ALTER TABLE agents ADD COLUMN gdal_version TEXT",
+        "ALTER TABLE agents ADD COLUMN proj_version TEXT",
+        "ALTER TABLE agents ADD COLUMN geos_version TEXT",
+        "ALTER TABLE agents ADD COLUMN capabilities_json TEXT",
+        "ALTER TABLE activities ADD COLUMN parameter_definitions_json TEXT",
+        "CREATE TABLE IF NOT EXISTS registry_snapshots ("
+        " id TEXT PRIMARY KEY,"
+        " agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,"
+        " captured_at TEXT NOT NULL,"
+        " algorithm_count INTEGER NOT NULL,"
+        " algorithms_z BLOB NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS idx_registry_snapshots_captured"
+        " ON registry_snapshots (captured_at)",
     ],
 }
 

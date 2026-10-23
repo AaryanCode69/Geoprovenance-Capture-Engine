@@ -273,3 +273,30 @@ def test_a_file_with_no_path_still_appears(store):
     record = document["entity"][f"gp:{temp}"]
     assert record["prov:label"] == "Clipped (temporary)"
     assert "gp:filePath" not in record  # omitted, not written as null
+
+
+def test_prov_json_carries_was_attributed_to_for_every_output():
+    """C3 (24 Oct 2026): all five PROV relations reach the export."""
+    from geoprovenance.prov import ProvGraph, to_prov_json
+    from geoprovenance.storage.store import ProvenanceStore
+
+    import pathlib
+    store = ProvenanceStore(
+        pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "mock_provenance.db"
+    )
+    try:
+        for workflow in store.list_workflows():
+            graph = store.get_workflow_graph(workflow["id"])
+            document = to_prov_json(ProvGraph(graph))
+            generated = {
+                r["prov:entity"] for r in document.get("wasGeneratedBy", {}).values()
+            }
+            attributed = {
+                r["prov:entity"] for r in document.get("wasAttributedTo", {}).values()
+            }
+            assert generated and generated == attributed
+            for kind in ("used", "wasGeneratedBy", "wasDerivedFrom",
+                         "wasAssociatedWith", "wasAttributedTo"):
+                assert kind in document, (workflow["name"], kind)
+    finally:
+        store.close()

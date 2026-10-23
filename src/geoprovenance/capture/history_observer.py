@@ -73,6 +73,7 @@ POLL_INTERVAL_MS = 5000
 _ALGORITHM_ID_KEYS = ("algorithm_id", "algorithmId", "alg_id", "algorithm")
 _PARAMETER_KEYS = ("parameters", "algorithm_parameters", "params")
 _COMMAND_KEYS = ("python_command", "command", "pythonCommand")
+_RESULT_KEYS = ("results", "outputs")
 
 #: QGIS 4 does not put the algorithm's parameters directly under `parameters`.
 #: It wraps them: the real dict sits under `inputs`, alongside run metadata.
@@ -140,10 +141,12 @@ def parse_history_entry(payload: Any) -> dict | None:
             parameters = {}
         parameters = _unwrap_parameters(parameters)
 
+        results = _first_present(payload, _RESULT_KEYS)
         return {
             "algorithm_id": algorithm_id,
             "parameters": parameters,
             "python_command": command if isinstance(command, str) else None,
+            "results": results if isinstance(results, dict) else None,
         }
     except Exception:  # noqa: BLE001 — §5.1 [HARD]
         return None
@@ -234,9 +237,21 @@ class HistoryObserver:
     does not accumulate an ever-growing set in memory.
     """
 
-    def __init__(self, engine: ProvenanceCaptureEngine, *, last_seen_id: int = 0):
+    def __init__(
+        self,
+        engine: ProvenanceCaptureEngine,
+        *,
+        last_seen_id: int = 0,
+        definitions_lookup: Callable[[str], dict | None] | None = None,
+    ):
         self._engine = engine
         self._high_water = last_seen_id
+        #: C4 (24 Oct 2026) — algorithm id -> {param name: type}, from the live
+        #: Processing registry in QGIS. With it, a job seen only by this channel
+        #: has its file parameters lifted into inputs and outputs exactly as the
+        #: hook and wrapper channels do; without it (tests, or an algorithm the
+        #: registry no longer has) every parameter stays a scalar, as before.
+        self._definitions_lookup = definitions_lookup
         #: RQ1 bookkeeping — how many entries this channel actually offered.
         self.offered = 0
         self.skipped = 0
@@ -268,16 +283,21 @@ class HistoryObserver:
                 return False
 
             started_at = entry_timestamp(timestamp) or utc_now_iso()
+            definitions = None
+            if self._definitions_lookup is not None:
+                try:
+                    definitions = self._definitions_lookup(parsed["algorithm_id"])
+                except Exception as exc:  # noqa: BLE001 — §5.1
+                    log_exception("history observer: parameter definitions", exc)
             self._engine.record_algorithm_execution(
                 algorithm_id=parsed["algorithm_id"],
                 parameters=parsed["parameters"],
-                # No QgsProcessingAlgorithm in hand, so no parameter type map.
-                # Every parameter therefore stays a scalar in `parameters`
-                # rather than being lifted into inputs/outputs (§3.3) — this
-                # channel corroborates that a run HAPPENED; the hook channel
-                # is the one that sees the datasets. Recorded as a limitation
-                # in docs/capture_coverage.md §2.
-                parameter_definitions=None,
+                # Since 24 Oct 2026 (C4) the type map comes from the live
+                # registry by algorithm id, so file parameters are lifted into
+                # inputs and outputs here too. Until then this channel only
+                # corroborated that a run happened.
+                parameter_definitions=definitions,
+                results=parsed.get("results"),
                 started_at=started_at,
                 ended_at=started_at,
                 source="history_signal",
@@ -410,6 +430,20 @@ def _query_entries(registry) -> list:
         return []
 
 
+def _live_definitions(algorithm_id: str) -> dict | None:
+    """{param name: type} for an algorithm in the live registry, or None (C4)."""
+    try:
+        from qgis.core import QgsApplication
+
+        from .hooks import parameter_definitions
+    except ImportError:
+        return None
+    algorithm = QgsApplication.processingRegistry().algorithmById(algorithm_id)
+    if algorithm is None:
+        return None
+    return parameter_definitions(algorithm)
+
+
 def install_history_observer(
     engine: ProvenanceCaptureEngine,
 ) -> list[tuple[str, Callable[[], None]]]:
@@ -435,7 +469,9 @@ def install_history_observer(
         if numeric is not None:
             start_from = max(start_from, numeric)
 
-    observer = HistoryObserver(engine, last_seen_id=start_from)
+    observer = HistoryObserver(
+        engine, last_seen_id=start_from, definitions_lookup=_live_definitions
+    )
     undos: list[tuple[str, Callable[[], None]]] = []
     logged_shape = [False]
 

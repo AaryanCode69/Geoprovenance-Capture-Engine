@@ -93,11 +93,62 @@ def plugin_versions() -> dict[str, str]:
     return versions
 
 
+def gdal_version() -> str:
+    """GDAL as QGIS loaded it (v3, C2). The release name, e.g. "3.13.3"."""
+    try:
+        from osgeo import gdal
+    except ImportError:
+        return UNKNOWN
+    try:
+        return str(gdal.VersionInfo("RELEASE_NAME")).strip() or UNKNOWN
+    except Exception:  # noqa: BLE001 — §5.1
+        return UNKNOWN
+
+
+def proj_version() -> str:
+    """PROJ as QGIS was built against it (v3, C2)."""
+    try:
+        from qgis.core import QgsProjUtils
+    except ImportError:
+        return UNKNOWN
+    try:
+        return f"{QgsProjUtils.projVersionMajor()}.{QgsProjUtils.projVersionMinor()}"
+    except Exception:  # noqa: BLE001 — §5.1
+        return UNKNOWN
+
+
+def geos_version() -> str:
+    """GEOS as QGIS was built against it (v3, C2)."""
+    try:
+        from qgis.core import Qgis
+    except ImportError:
+        return UNKNOWN
+    try:
+        version = getattr(Qgis, "geosVersion", None)
+        if version is not None:
+            # e.g. "3.14.1-CAPI-1.20.5" — the C API suffix is not the release.
+            return str(version()).split("-")[0].strip() or UNKNOWN
+        major = Qgis.geosVersionMajor()
+        minor = Qgis.geosVersionMinor()
+        patch = Qgis.geosVersionPatch()
+        return f"{major}.{minor}.{patch}"
+    except Exception:  # noqa: BLE001 — §5.1
+        return UNKNOWN
+
+
 def probe() -> dict:
-    """The ``agent`` block of the event dict (docs/CONTRACT_event.md)."""
+    """The ``agent`` block of the event dict (docs/CONTRACT_event.md).
+
+    GDAL, PROJ and GEOS were added on 24 Oct 2026 (schema v3, C2): a result can
+    drift with any of them while the QGIS version stays the same. Outside QGIS
+    they read "unknown", and the audit treats unknown as not evaluable.
+    """
     return {
         "qgis_version": qgis_version(),
         "os_info": os_info(),
         "python_version": python_version(),
         "plugin_versions": plugin_versions(),
+        "gdal_version": gdal_version(),
+        "proj_version": proj_version(),
+        "geos_version": geos_version(),
     }

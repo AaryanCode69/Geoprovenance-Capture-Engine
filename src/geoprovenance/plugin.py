@@ -65,7 +65,7 @@ except ImportError:  # Qt 6 moved QAction from QtWidgets to QtGui
     from qgis.PyQt.QtGui import QAction
 
 from . import paths
-from .capture import history_observer, hooks
+from .capture import history_observer, hooks, registry
 from .capture.engine import ProvenanceCaptureEngine
 from .lifecycle import CleanupStack
 from .log import CRITICAL, INFO, WARNING, log, log_exception
@@ -166,6 +166,26 @@ class GeoProvenancePlugin:
         # phrased in ("the hook caught 98%, the history channel the rest").
         for description, undo in history_observer.install_history_observer(self.engine):
             self._cleanup.defer(description, undo)
+
+        # C6 — tell the engine whether QGIS took our post-execution script, so
+        # its probe can record "active", "inactive" or "not_installed". Settled
+        # by the engine from its own observations; settled once more on unload.
+        self.engine.hook_installed = hooks.post_hook_installed
+        self._cleanup.defer("settle the post-execution hook probe",
+                            self.engine.finish_hook_probe)
+
+        # C9 — snapshot the Processing registry at the first job of the
+        # session, not here: at plugin load the Processing providers may not
+        # all be registered yet, and a snapshot taken too early would report
+        # algorithms as missing that are merely late.
+        self._snapshot_taken = False
+        self.engine.on_observed = self._on_first_observation
+
+    def _on_first_observation(self, _activity_id, _channel) -> None:
+        if self._snapshot_taken or self.store is None:
+            return
+        self._snapshot_taken = True
+        registry.record_snapshot(self.store)
 
     def _watch_project(self) -> None:
         """A new or opened project starts a new record (26 Aug 2026).

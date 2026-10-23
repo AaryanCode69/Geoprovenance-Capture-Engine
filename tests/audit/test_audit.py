@@ -287,3 +287,71 @@ def test_each_file_is_read_once_however_many_jobs_touch_it(store, captured, monk
     )
     _audit(store, captured["workflow"])
     assert len(calls) == len(set(calls))
+
+
+# ---------------------------------------------------------------------------
+# v3 (24 Oct 2026): every library, and the registry snapshot (C2, C9)
+# ---------------------------------------------------------------------------
+
+def test_each_library_that_differs_is_named():
+    was = {"qgis_version": "4.2.3", "gdal_version": "3.13.3", "proj_version": "9.9",
+           "geos_version": "3.14.1", "python_version": "3.14.0"}
+    now = {"qgis_version": "3.34.6", "gdal_version": "3.8.5", "proj_version": "9.9",
+           "geos_version": "3.14.0", "python_version": "3.12.15"}
+    ok, why = audit._environment_similar(was, now)
+    assert ok is False
+    assert "QGIS 4.2.3 then" in why and "GDAL 3.13.3 then" in why and "Python" in why
+    assert "PROJ" not in why and "GEOS" not in why  # same major.minor
+
+
+def test_a_gdal_minor_upgrade_alone_fails_the_environment_check():
+    was = {"qgis_version": "4.2.3", "gdal_version": "3.12.1"}
+    now = {"qgis_version": "4.2.3", "gdal_version": "3.13.3"}
+    ok, why = audit._environment_similar(was, now)
+    assert ok is False and why == "GDAL 3.12.1 then, GDAL 3.13.3 now"
+
+
+def test_an_unknown_library_takes_no_part():
+    was = {"qgis_version": "4.2.3", "gdal_version": "unknown"}
+    now = {"qgis_version": "4.2.1", "gdal_version": "3.13.3"}
+    assert audit._environment_similar(was, now) == (True, "")
+
+
+def test_nothing_comparable_is_not_evaluable():
+    assert audit._environment_similar({"gdal_version": "3.13.3"}, {"qgis_version": "4.2.3"}) == (None, "")
+
+
+def test_without_qgis_the_audit_uses_the_latest_registry_snapshot(store, captured):
+    """C9: the three QGIS-dependent checks become evaluable from the database."""
+    agent = store.get_or_create_agent(qgis_version="3.34.8", python_version="3.12.3")
+    store.add_registry_snapshot(
+        agent_id=agent,
+        algorithms={"native:buffer": {"provider": "native",
+                                      "parameters": ["INPUT", "DISTANCE", "OUTPUT"]}},
+    )
+    result = audit.audit_workflow(store, captured["workflow"])
+    assert result.components["algorithm_available"] == 100.0
+    assert result.components["parameters_valid"] == 100.0
+
+
+def test_a_snapshot_without_the_algorithm_fails_availability(store, captured):
+    agent = store.get_or_create_agent(qgis_version="3.34.8")
+    store.add_registry_snapshot(agent_id=agent, algorithms={"native:clip": {"parameters": []}})
+    result = audit.audit_workflow(store, captured["workflow"])
+    assert result.components["algorithm_available"] == 0.0
+    assert result.components["parameters_valid"] is None
+
+
+def test_a_snapshot_whose_algorithm_dropped_a_parameter_fails_validity(store, captured):
+    agent = store.get_or_create_agent(qgis_version="3.34.8")
+    store.add_registry_snapshot(
+        agent_id=agent, algorithms={"native:buffer": {"parameters": ["INPUT", "OUTPUT"]}}
+    )
+    result = audit.audit_workflow(store, captured["workflow"])
+    assert result.components["parameters_valid"] == 0.0
+
+
+def test_no_snapshot_and_no_qgis_leaves_the_three_checks_unevaluated(store, captured):
+    result = audit.audit_workflow(store, captured["workflow"])
+    for name in ("algorithm_available", "parameters_valid", "environment_similar"):
+        assert result.components[name] is None

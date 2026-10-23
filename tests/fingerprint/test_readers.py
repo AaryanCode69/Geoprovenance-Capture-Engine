@@ -231,9 +231,46 @@ def test_none_is_accepted_because_memory_layers_arrive_as_none():
 # attribute payload
 # ===========================================================================
 
-def test_the_shapefile_attribute_payload_is_the_dbf(shapefile: pathlib.Path):
-    payload = b"".join(readers.attribute_chunks(shapefile))
-    assert len(payload) == shapefile.with_suffix(".dbf").stat().st_size
+def _swap_first_two_dbf_rows(dbf: pathlib.Path) -> None:
+    raw = bytearray(dbf.read_bytes())
+    header_length, record_length = struct.unpack("<HH", raw[8:12])
+    a = slice(header_length, header_length + record_length)
+    b = slice(header_length + record_length, header_length + 2 * record_length)
+    raw[a], raw[b] = raw[b], raw[a]
+    dbf.write_bytes(bytes(raw))
+
+
+def test_the_shapefile_attribute_payload_ignores_row_order(shapefile: pathlib.Path):
+    """Rows in another order are the same table (C1, 24 Oct 2026)."""
+    before = b"".join(readers.attribute_chunks(shapefile))
+    _swap_first_two_dbf_rows(shapefile.with_suffix(".dbf"))
+    assert b"".join(readers.attribute_chunks(shapefile)) == before
+
+
+def test_the_shapefile_attribute_payload_has_one_line_per_row(shapefile: pathlib.Path):
+    lines = b"".join(readers.attribute_chunks(shapefile)).splitlines()
+    assert len(lines) == 8
+    assert lines == sorted(lines)
+
+
+def test_a_numeric_value_padded_differently_is_the_same_value():
+    assert readers._dbf_value("N", b"  1.50") == readers._dbf_value("N", b"1.5   ")
+    assert readers._dbf_value("N", b"   1") == readers._dbf_value("N", b"1.0")
+    assert readers._dbf_value("N", b"   2") != readers._dbf_value("N", b"1")
+    assert readers._dbf_value("N", b"      ") is None
+    assert readers._dbf_value("L", b"y") == readers._dbf_value("L", b"T")
+    assert readers._dbf_value("C", b"Main St   ") == "Main St"
+
+
+def test_a_deleted_dbf_row_is_not_data(shapefile: pathlib.Path):
+    before = b"".join(readers.attribute_chunks(shapefile))
+    dbf = shapefile.with_suffix(".dbf")
+    raw = bytearray(dbf.read_bytes())
+    header_length = struct.unpack("<H", raw[8:10])[0]
+    raw[header_length] = ord("*")
+    dbf.write_bytes(bytes(raw))
+    after = b"".join(readers.attribute_chunks(shapefile))
+    assert len(after.splitlines()) == 7 and after != before
 
 
 def test_the_dbf_last_written_date_is_blanked_before_hashing(
@@ -323,16 +360,24 @@ def _swap_first_two_shp_records(shp: pathlib.Path) -> None:
     shp.write_bytes(bytes(raw))
 
 
-def test_the_shapefile_geometry_payload_keeps_record_order(shapefile: pathlib.Path):
-    """The `.dbf` rows pair with the `.shp` records by position.
+def test_the_shapefile_geometry_payload_ignores_record_order(shapefile: pathlib.Path):
+    """Records in another order are the same shapes (C1, 24 Oct 2026).
 
-    Swapping two records leaves the same set of points but gives each one the
-    other's attributes, which is an edit — so, unlike the GeoPackage payload,
-    this one is not sorted.
+    Until then file order was kept because `.dbf` rows pair with records by
+    position. With both payloads sorted, a reorder of the whole file is a
+    re-save; the residual — two features swapping attributes and nothing
+    else — is stated in `readers._dbf_row_chunks` and in the manuscript.
     """
     before = b"".join(readers.geometry_chunks(shapefile))
     _swap_first_two_shp_records(shapefile)
-    assert b"".join(readers.geometry_chunks(shapefile)) != before
+    assert b"".join(readers.geometry_chunks(shapefile)) == before
+
+
+def test_a_shapefile_over_the_row_ceiling_yields_no_coordinate_signal(
+    shapefile: pathlib.Path,
+):
+    assert readers.geometry_chunks(shapefile, max_rows=3) is None
+    assert readers.attribute_chunks(shapefile, max_rows=3) is None
 
 
 def test_the_shapefile_record_numbers_are_not_part_of_the_payload(

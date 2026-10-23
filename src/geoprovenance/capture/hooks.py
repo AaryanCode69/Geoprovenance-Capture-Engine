@@ -259,6 +259,12 @@ def handle_post_execution(scope: dict) -> None:
         log_exception("post-execution hook", exc)
 
 
+#: C6 — whether QGIS accepted our post-execution script on this load. Read by
+#: plugin.py and handed to the engine's hook probe: a hook that was never
+#: installed is "not_installed", not "inactive".
+post_hook_installed = False
+
+
 def _install_hook_script(hook_dir, *, when: str, filename: str, handler: str,
                          setting: str) -> Callable[[], None]:
     """Write one hook script and point a ProcessingConfig setting at it.
@@ -302,6 +308,10 @@ def _install_hook_script(hook_dir, *, when: str, filename: str, handler: str,
         log_exception(f"could not install the {when}-execution hook", exc)
         return lambda: None
 
+    if when == "post":
+        global post_hook_installed
+        post_hook_installed = True
+
     if previous:
         log(f"{when}-execution hook installed; your previous script ({previous}) "
             f"will be restored when the plugin unloads (§5.3)", WARNING)
@@ -309,6 +319,9 @@ def _install_hook_script(hook_dir, *, when: str, filename: str, handler: str,
         log(f"{when}-execution hook installed at {hook_path}", INFO)
 
     def restore() -> None:
+        global post_hook_installed
+        if when == "post":
+            post_hook_installed = False
         try:
             ProcessingConfig.setSettingValue(setting_name, previous or "")
             log(f"{when}-execution hook removed, previous setting restored", INFO)

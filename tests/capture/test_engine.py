@@ -66,7 +66,9 @@ def test_one_buffer_produces_the_A3_record_shape(engine, store):  # noqa: N802
     assert counts["agents"] == 1
     assert counts["activities"] == 1
     assert counts["entities"] == 2
-    assert counts["relations"] == 3  # used, wasGeneratedBy, wasAssociatedWith
+    # used, wasGeneratedBy, wasAssociatedWith, and since v3 (C3)
+    # wasAttributedTo from the output to the environment.
+    assert counts["relations"] == 4
 
     relations = store.get_relations_for(result.activity_id, direction="both")
     assert {r["relation_type"] for r in relations} == {
@@ -107,7 +109,13 @@ def test_replaying_the_same_job_does_not_double_the_links(engine, store):
     before = store.counts()["relations"]
     run_buffer(engine, started_at="2026-08-08T11:00:00.000000+00:00")
     after = store.counts()["relations"]
-    assert after - before == 4  # exactly one more job's worth, not a re-link
+    # Exactly one more job's worth, not a re-link: used, wasGeneratedBy,
+    # wasAssociatedWith, the derivation, and wasAttributedTo (C3) for the output.
+    # The output path here is not a real file, so the write cannot be verified
+    # and mints a new content version (decision 1) — a new entity, which is
+    # attributed once. test_was_attributed_to_is_written_once_per_file_version
+    # covers the reuse case.
+    assert after - before == 5
 
 
 def test_relation_directions_match_the_research_doc(engine, store):
@@ -698,3 +706,97 @@ def test_the_agent_row_does_not_survive_a_failed_execution(engine, store):
         })
     assert store.counts()["agents"] == 0, "no orphan agent row from a failed write"
     assert store.counts()["activities"] == 0
+
+
+def test_every_output_is_attributed_to_the_environment(engine, store):
+    """C3 (24 Oct 2026): the fifth PROV relation, entity -> agent."""
+    engine.enrich = False
+    result = run_buffer(engine)
+    output = [
+        r for r in store.get_relations_for(result.activity_id, direction="both")
+        if r["relation_type"] == "wasGeneratedBy"
+    ][0]["source_id"]
+    attributed = [
+        r for r in store.get_relations_for(output, "out")
+        if r["relation_type"] == "wasAttributedTo"
+    ]
+    associated = [
+        r for r in store.get_relations_for(result.activity_id, "out")
+        if r["relation_type"] == "wasAssociatedWith"
+    ]
+    assert len(attributed) == 1
+    assert attributed[0]["target_id"] == associated[0]["target_id"]
+
+
+def test_was_attributed_to_is_written_once_per_file_version(engine, store, tmp_path):
+    """A re-run that reuses the same file version adds no second attribution."""
+    engine.enrich = False
+    out = tmp_path / "out.gpkg"
+    out.write_bytes(b"x")
+    for started in ("2026-08-08T10:00:00.000000+00:00", "2026-08-08T11:00:00.000000+00:00"):
+        engine.record_algorithm_execution(
+            algorithm_id="native:buffer",
+            parameters={"INPUT": str(tmp_path / "in.shp"), "OUTPUT": str(out)},
+            parameter_definitions={"INPUT": "source", "OUTPUT": "sink"},
+            started_at=started, ended_at=started, source="run_wrapper",
+            agent={"qgis_version": "4.2.3", "os_info": "Linux", "python_version": "3.14.0"},
+        )
+    rows = store._connection().execute(
+        "SELECT count(*) FROM relations WHERE relation_type = 'wasAttributedTo'"
+    ).fetchone()[0]
+    assert rows == 1
+
+
+def test_the_parameter_definitions_are_kept_with_the_job(engine, store):
+    """C9 (24 Oct 2026): what the algorithm declared, at capture time."""
+    engine.enrich = False
+    result = run_buffer(engine)
+    activity = store.get_activity(result.activity_id)
+    assert activity["parameter_definitions_json"] is not None
+    assert "INPUT" in json.loads(activity["parameter_definitions_json"])
+
+
+def test_the_hook_probe_reads_inactive_when_only_the_wrapper_saw_the_job(engine, store):
+    """C6: a job seen only by run_wrapper means the hook did not fire."""
+    engine.enrich = False
+    result = run_buffer(engine, source="run_wrapper")
+    assert engine.resolve_hook_probe(result.activity_id, hook_installed=True) == "inactive"
+    agent_id = [
+        r for r in store.get_relations_for(result.activity_id, "out")
+        if r["relation_type"] == "wasAssociatedWith"
+    ][0]["target_id"]
+    assert json.loads(store.get_agent(agent_id)["capabilities_json"]) == {
+        "post_execution_hook": "inactive"
+    }
+
+
+def test_the_hook_probe_reads_active_when_the_hook_corroborated(engine, store):
+    engine.enrich = False
+    first = run_buffer(engine, source="run_wrapper")
+    second = run_buffer(engine, source="post_hook")
+    assert second.corroborated and second.activity_id == first.activity_id
+    assert engine.channels_for(first.activity_id) >= {"post_hook"}
+    assert engine.resolve_hook_probe(first.activity_id, hook_installed=True) == "active"
+
+
+def test_the_hook_probe_reports_a_hook_that_was_never_installed(engine, store):
+    engine.enrich = False
+    result = run_buffer(engine)
+    assert engine.resolve_hook_probe(result.activity_id, hook_installed=False) == "not_installed"
+
+
+def test_the_engine_tells_its_observer_about_every_observation(engine):
+    seen = []
+    engine.enrich = False
+    engine.on_observed = lambda activity_id, channel: seen.append(channel)
+    run_buffer(engine, source="run_wrapper")
+    run_buffer(engine, source="post_hook")
+    assert seen == ["run_wrapper", "post_hook"]
+
+
+def test_a_failing_observer_never_breaks_capture(engine):
+    engine.enrich = False
+    def explode(*_):
+        raise RuntimeError("boom")
+    engine.on_observed = explode
+    assert run_buffer(engine).recorded

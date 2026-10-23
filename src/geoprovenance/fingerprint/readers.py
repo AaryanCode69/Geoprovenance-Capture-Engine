@@ -3,8 +3,11 @@
 Owner: Person B.  Research doc §6.4 row 2 ("feature-count + schema hash").
 
 `geometry_chunks` was added by Person A on 6 Oct 2026 under an explicit written
-override of RULES.md §1.2 [HARD], requested by the user for this one fix. The
-override covers that fix only; Person B still owns this file.
+override of RULES.md §1.2 [HARD], requested by the user for this one fix. On
+24 Oct 2026 Person A made the Shapefile coordinate and attribute payloads
+order-insensitive under a second explicit written override, requested by the
+user for the Array manuscript (CLAIMS_TO_IMPLEMENT.md C1). Person B still owns
+this file.
 
     RULES.md §2.2 — standard library only. `struct`, `sqlite3`, `pathlib`, `json`.
     RULES.md §4.1 — imports no QGIS, so the whole layer runs under `make test`.
@@ -44,14 +47,13 @@ What can be read, and what cannot
                 field names and types, and the .prj carries the CRS.
     GeoPackage  it is a SQLite database: `gpkg_contents` carries the extent
                 per table and `PRAGMA table_info` carries the columns.
-    everything else, GeoTIFF included, returns None.
+    everything else returns None here.
 
-    GeoTIFF is the honest gap, and it is the same one `qgis_demo/footprints.py`
-    documents: reading a GeoTIFF's georeferencing means parsing TIFF IFDs and
-    the GeoKey directory, and the alternative is a GDAL dependency, which is
-    exactly what RULES.md §2.2 exists to refuse. A dataset with no description
-    contributes no complementary fingerprints, and the comparison then reports
-    `unknown` on those axes rather than guessing (RULES.md §5.6).
+    GeoTIFF is read by its own module, `tiff.py` (added 24 Oct 2026), which
+    parses the TIFF IFDs and the GeoKey directory with `struct` and decodes
+    Deflate pixels with `zlib` — still no GDAL (RULES.md §2.2). Any other
+    format contributes no complementary fingerprints, and the comparison then
+    reports those axes as unavailable rather than guessing (RULES.md §5.6).
 """
 
 from __future__ import annotations
@@ -84,13 +86,6 @@ _SHX_RECORD_BYTES = 8
 _DBF_FIELD_ARRAY_OFFSET = 32
 _DBF_FIELD_DESCRIPTOR_BYTES = 32
 _DBF_FIELD_TERMINATOR = 0x0D
-
-#: Bytes 1-3 of a .dbf are the date it was last written (YY, MM, DD). They move
-#: when the file is rewritten even if not one value changed, which is the same
-#: class of false positive as SQLite's version stamp. Blanked before hashing —
-#: `tests/fixtures/build_fixtures.py` already does exactly this to the
-#: GeoPackage header for the same reason.
-_DBF_LAST_UPDATE_SLICE = slice(1, 4)
 
 #: Coordinates are rounded before they reach a digest so that a bounding box
 #: recomputed by another writer cannot differ in the last unit in the last
@@ -255,7 +250,7 @@ def attribute_chunks(
             dbf = target.with_suffix(".dbf")
             if not dbf.is_file():
                 return None
-            return _dbf_chunks(dbf)
+            return _dbf_row_chunks(dbf, max_rows=max_rows)
         if suffix in (".gpkg", ".geopackage"):
             return _geopackage_attribute_chunks(target, max_rows=max_rows)
     except (OSError, struct.error, sqlite3.Error, DatasetReadError):
@@ -294,8 +289,8 @@ def geometry_chunks(
     suffix = target.suffix.lower()
     try:
         if suffix == ".shp":
-            _shapefile_bbox(target)  # checks the magic number before streaming
-            return _shp_record_chunks(target)
+            _shapefile_bbox(target)  # checks the magic number before reading
+            return _shp_record_chunks(target, max_rows=max_rows)
         if suffix in (".gpkg", ".geopackage"):
             return _geopackage_geometry_chunks(target, max_rows=max_rows)
     except (OSError, struct.error, sqlite3.Error, DatasetReadError):
@@ -396,64 +391,115 @@ def _dbf_fields(dbf: pathlib.Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return (tuple(names), tuple(types))
 
 
-def _dbf_chunks(dbf: pathlib.Path, chunk_bytes: int = 1024 * 1024) -> Iterator[bytes]:
-    """The `.dbf` file, streamed, with its last-written date blanked.
+def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | None:
+    """One digest per live `.dbf` row, sorted — the Shapefile attribute payload.
 
-    Hashing the attribute file whole is exact and costs one sequential read —
-    there is no cheaper way to notice that one name in one row changed, and no
-    more accurate one either.
+    Until 24 Oct 2026 this was the `.dbf` file itself, streamed with its date
+    blanked. That was exact, but it made the attribute signal depend on row
+    ORDER and on how a writer pads a value, so a Shapefile rewritten with its
+    rows in another order, or by a writer that formats numbers differently,
+    read as an attribute edit. The GeoPackage payload never had that problem
+    (rows sorted, values canonical); this brings the Shapefile in line.
 
-    Bytes 1-3 are zeroed because they hold the date the file was last written.
-    They move on every rewrite whether or not a value changed, which is the
-    same false positive this module exists to remove; leaving them in would
-    have the attribute signal agreeing with the byte hash exactly when it most
-    needs to disagree.
+    Each value is canonicalised by its dBASE type: character fields lose their
+    padding, numeric fields are parsed so `1.50` and `  1.5` agree, logicals
+    collapse to T/F/?. Rows marked deleted are skipped — they are not data.
+    The decoded bytes are kept as Latin-1, a lossless mapping, so no encoding
+    guess can merge two different values.
+
+    Sorting means pairing a row with its shape is not checked here, nor in the
+    coordinate payload: two features swapping attributes and nothing else is
+    invisible. That residual is shared with the GeoPackage payloads and is
+    stated in the manuscript (§3.5). None above `max_rows`, as for GeoPackage.
     """
+    with dbf.open("rb") as handle:
+        header = handle.read(32)
+        if len(header) < 32:
+            raise DatasetReadError(f"{dbf} is too short to hold a dBASE header")
+        count, header_length, record_length = struct.unpack("<IHH", header[4:12])
+        if count > max_rows:
+            return None
+        handle.seek(0)
+        descriptors = handle.read(header_length)
+        fields: list[tuple[str, int]] = []
+        offset = _DBF_FIELD_ARRAY_OFFSET
+        while offset + _DBF_FIELD_DESCRIPTOR_BYTES <= len(descriptors):
+            if descriptors[offset] == _DBF_FIELD_TERMINATOR:
+                break
+            fields.append((chr(descriptors[offset + 11]), descriptors[offset + 16]))
+            offset += _DBF_FIELD_DESCRIPTOR_BYTES
+        handle.seek(header_length)
+        digests: list[bytes] = []
+        for _ in range(count):
+            record = handle.read(record_length)
+            if len(record) < record_length:
+                raise DatasetReadError(f"{dbf} ends inside a record")
+            if record[:1] == b"*":
+                continue
+            values = []
+            position = 1
+            for kind, width in fields:
+                raw = record[position : position + width]
+                position += width
+                values.append(_dbf_value(kind, raw))
+            digests.append(
+                hashlib.sha256(
+                    json.dumps(values, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+                ).digest()
+            )
+    digests.sort()
+    return (digest.hex().encode("ascii") + b"\n" for digest in digests)
 
-    def stream() -> Iterator[bytes]:
-        with dbf.open("rb") as handle:
-            first = handle.read(chunk_bytes)
-            if first:
-                patched = bytearray(first)
-                patched[_DBF_LAST_UPDATE_SLICE] = b"\x00\x00\x00"
-                yield bytes(patched)
-            while chunk := handle.read(chunk_bytes):
-                yield chunk
 
-    return stream()
+def _dbf_value(kind: str, raw: bytes) -> object:
+    text = raw.decode("latin-1").strip()
+    if kind in ("N", "F"):
+        if not text or set(text) <= {"*"}:
+            return None
+        try:
+            number = float(text)
+        except ValueError:
+            return text
+        return repr(number)  # "1", "1.0" and "  1.00" are the same number
+    if kind == "L":
+        if text[:1] in ("T", "t", "Y", "y"):
+            return "T"
+        if text[:1] in ("F", "f", "N", "n"):
+            return "F"
+        return None
+    return text
 
 
-def _shp_record_chunks(shp: pathlib.Path) -> Iterator[bytes]:
-    """Every `.shp` record's content, length-prefixed, in file order.
+def _shp_record_chunks(shp: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | None:
+    """One digest per `.shp` record's content, sorted.
 
-    The 8-byte record header is a big-endian record number and content length.
-    The number is left out: it is always 1..n, so it can only say where a
-    record sits, and the order is already in the stream. The length is kept, as
-    a prefix, so two records can never run together into the same bytes as one.
+    The 8-byte record header (record number, content length) is left out: the
+    number only says where a record sits. The content — shape type, the
+    record's own box and the coordinates — is hashed as written.
 
-    File order is kept, not sorted, because the `.dbf` rows are matched to the
-    `.shp` records by position. Reordering the records alone re-pairs every
-    shape with different attributes, which is an edit.
-
-    The content is hashed as written — shape type, the record's own bounding
-    box, and the coordinates. The record box is computed from the coordinates,
-    so it adds nothing a re-save could move.
+    Sorted since 24 Oct 2026, so a Shapefile rewritten with its features in
+    another order reads as a re-save, as a GeoPackage already did. Until then
+    file order was kept because `.dbf` rows pair with records by position; the
+    attribute payload is now order-free too, so keeping order here would only
+    have made row reordering look like a geometry edit. The pairing residual
+    this leaves is stated in `_dbf_row_chunks`.
     """
-
-    def stream() -> Iterator[bytes]:
-        with shp.open("rb") as handle:
-            handle.seek(_SHAPEFILE_HEADER_BYTES)
-            while header := handle.read(8):
-                if len(header) < 8:
-                    raise DatasetReadError(f"{shp} ends inside a record header")
-                _, words = struct.unpack(">ii", header)
-                length = words * 2
-                content = handle.read(length)
-                if words < 0 or len(content) != length:
-                    raise DatasetReadError(f"{shp} ends inside a record")
-                yield struct.pack("<I", length) + content
-
-    return stream()
+    digests: list[bytes] = []
+    with shp.open("rb") as handle:
+        handle.seek(_SHAPEFILE_HEADER_BYTES)
+        while header := handle.read(8):
+            if len(header) < 8:
+                raise DatasetReadError(f"{shp} ends inside a record header")
+            _, words = struct.unpack(">ii", header)
+            length = words * 2
+            content = handle.read(length)
+            if words < 0 or len(content) != length:
+                raise DatasetReadError(f"{shp} ends inside a record")
+            digests.append(hashlib.sha256(content).digest())
+            if len(digests) > max_rows:
+                return None
+    digests.sort()
+    return (digest.hex().encode("ascii") + b"\n" for digest in digests)
 
 
 #: WKT structural punctuation. Whitespace beside any of it is layout, not

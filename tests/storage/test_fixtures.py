@@ -63,15 +63,16 @@ def test_all_fixture_artefacts_are_present():
 
 
 def test_database_is_at_the_current_schema_version(fixture_store):
-    assert fixture_store.schema_version() == 2
+    assert fixture_store.schema_version() == 3
 
 
 def test_row_counts_are_as_published(fixture_store):
     """If this fails after a schema change, RULES.md §3.4 step 3 was skipped."""
     assert fixture_store.counts() == {
         "entities": 23, "activities": 16, "agents": 2, "fingerprints": 22,
-        "relations": 71, "workflows": 3, "workflow_activities": 16,
-        "audit_results": 0,
+        # 71 -> 87 on 24 Oct 2026: one wasAttributedTo per output (C3, v3).
+        "relations": 87, "workflows": 3, "workflow_activities": 16,
+        "audit_results": 0, "registry_snapshots": 0,
     }
 
 
@@ -91,7 +92,8 @@ def test_three_workflows_are_published(fixture_store):
 def test_reference_workflow_matches_the_research_doc(fixture_store, ids):
     """Research doc §7.3: roads -> Buffer -> buffered -> Clip -> final.
 
-    Ten relations, not the nine §7.3 prints. The tenth is deliberate and is the
+    Twelve relations, not the nine §7.3 prints: ten as before, plus one
+    wasAttributedTo per output since v3. The tenth is deliberate and is the
     one place this fixture departs from the published example: see the comment
     beside it in build_fixtures.py, and
     test_the_clip_result_comes_from_the_boundary_too below.
@@ -103,7 +105,9 @@ def test_reference_workflow_matches_the_research_doc(fixture_store, ids):
     assert {e["label"] for e in graph["entities"]} == {
         "roads.shp", "buffered_roads.shp", "city_boundary.shp", "final_roads.shp"
     }
-    assert len(graph["relations"]) == 10  # §7.3's nine, plus the link it omits
+    # §7.3's nine, plus the link it omits, plus (since v3, 24 Oct 2026) the
+    # two outputs' wasAttributedTo links to the environment (C3).
+    assert len(graph["relations"]) == 12
 
 
 def test_reference_workflow_paths_do_not_exist_on_disk(fixture_store, ids):
