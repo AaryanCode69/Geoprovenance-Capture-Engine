@@ -94,13 +94,49 @@ _DBF_FIELD_TERMINATOR = 0x0D
 #: float64 noise.
 BBOX_DECIMAL_PLACES = 9
 
-#: How many rows the GeoPackage attribute digest will read. Above it, no
-#: attribute signal is produced at all: the rows are sorted before hashing (see
-#: `attribute_chunks`), so the whole table has to be held at once, and a signal
-#: that costs unbounded memory inside a user's processing run is one RULES.md
-#: §5.1 would refuse anyway. A missing signal compares as `unknown`, which is
-#: true; a cheaper approximate one would be confidently wrong.
-DEFAULT_MAX_ATTRIBUTE_ROWS = 100_000
+#: No row ceiling by default (since 24 Oct 2026). Until then the content
+#: payloads SORTED one digest per row to be order-insensitive, which held the
+#: whole table in memory, so above 100,000 rows no attribute or coordinate
+#: signal was produced at all — measured in the E3 benchmark: every vector file
+#: of 10 MB or more fell back to the byte hash. They are now an additive
+#: multiset digest (`_Multiset`), order-insensitive in constant memory, so the
+#: ceiling is no longer needed. A caller may still pass one.
+DEFAULT_MAX_ATTRIBUTE_ROWS: int | None = None
+
+
+#: AdHash (Bellare and Micciancio, EUROCRYPT 1997): each row is expanded to
+#: MULTISET_BITS with SHAKE-256 and the rows are summed modulo 2**MULTISET_BITS.
+#: Addition commutes, so row order cannot matter, and the state is one integer
+#: however many rows there are. The modulus is large because Wagner's
+#: generalised birthday attack (CRYPTO 2002) finds additive collisions far
+#: faster than a birthday bound on a small one; at 2048 bits it is out of reach.
+MULTISET_BITS = 2048
+_MULTISET_MASK = (1 << MULTISET_BITS) - 1
+
+
+class _Multiset:
+    """An order-insensitive digest of a multiset of rows, in constant memory."""
+
+    __slots__ = ("count", "total")
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.total = 0
+
+    def add(self, *parts: bytes) -> None:
+        h = hashlib.shake_256()
+        for part in parts:
+            h.update(part)
+        self.total = (self.total + int.from_bytes(h.digest(MULTISET_BITS // 8), "big")) & _MULTISET_MASK
+        self.count += 1
+
+    def chunks(self) -> Iterator[bytes]:
+        """The payload the version-tagged digest in `hash.py` is taken over."""
+        return iter([f"{self.count}:{self.total:0{MULTISET_BITS // 4}x}\n".encode("ascii")])
+
+
+def _over(count: int, max_rows: int | None) -> bool:
+    return max_rows is not None and count > max_rows
 
 #: GeoPackage geometry blob header (GeoPackage 1.x, clause 2.1.3): "GP", a
 #: version byte, a flags byte, a 4-byte srs_id, then an optional envelope whose
@@ -224,7 +260,7 @@ def sidecar_paths(path: str | pathlib.Path | None) -> tuple[pathlib.Path, ...]:
 def attribute_chunks(
     path: str | pathlib.Path | None,
     *,
-    max_rows: int = DEFAULT_MAX_ATTRIBUTE_ROWS,
+    max_rows: int | None = DEFAULT_MAX_ATTRIBUTE_ROWS,
 ) -> Iterator[bytes] | None:
     """Bytes describing the dataset's attribute values, or None if unobtainable.
 
@@ -261,7 +297,7 @@ def attribute_chunks(
 def geometry_chunks(
     path: str | pathlib.Path | None,
     *,
-    max_rows: int = DEFAULT_MAX_ATTRIBUTE_ROWS,
+    max_rows: int | None = DEFAULT_MAX_ATTRIBUTE_ROWS,
 ) -> Iterator[bytes] | None:
     """Bytes describing the coordinates themselves, or None if unobtainable.
 
@@ -391,8 +427,8 @@ def _dbf_fields(dbf: pathlib.Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return (tuple(names), tuple(types))
 
 
-def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | None:
-    """One digest per live `.dbf` row, sorted — the Shapefile attribute payload.
+def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int | None) -> Iterator[bytes] | None:
+    """The multiset of live `.dbf` rows — the Shapefile attribute payload.
 
     Until 24 Oct 2026 this was the `.dbf` file itself, streamed with its date
     blanked. That was exact, but it made the attribute signal depend on row
@@ -417,7 +453,7 @@ def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | No
         if len(header) < 32:
             raise DatasetReadError(f"{dbf} is too short to hold a dBASE header")
         count, header_length, record_length = struct.unpack("<IHH", header[4:12])
-        if count > max_rows:
+        if _over(count, max_rows):
             return None
         handle.seek(0)
         descriptors = handle.read(header_length)
@@ -429,7 +465,7 @@ def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | No
             fields.append((chr(descriptors[offset + 11]), descriptors[offset + 16]))
             offset += _DBF_FIELD_DESCRIPTOR_BYTES
         handle.seek(header_length)
-        digests: list[bytes] = []
+        rows = _Multiset()
         for _ in range(count):
             record = handle.read(record_length)
             if len(record) < record_length:
@@ -442,13 +478,8 @@ def _dbf_row_chunks(dbf: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | No
                 raw = record[position : position + width]
                 position += width
                 values.append(_dbf_value(kind, raw))
-            digests.append(
-                hashlib.sha256(
-                    json.dumps(values, separators=(",", ":"), ensure_ascii=True).encode("ascii")
-                ).digest()
-            )
-    digests.sort()
-    return (digest.hex().encode("ascii") + b"\n" for digest in digests)
+            rows.add(json.dumps(values, separators=(",", ":"), ensure_ascii=True).encode("ascii"))
+    return rows.chunks()
 
 
 def _dbf_value(kind: str, raw: bytes) -> object:
@@ -476,8 +507,8 @@ def _dbf_value(kind: str, raw: bytes) -> object:
     return text
 
 
-def _shp_record_chunks(shp: pathlib.Path, *, max_rows: int) -> Iterator[bytes] | None:
-    """One digest per `.shp` record's content, sorted.
+def _shp_record_chunks(shp: pathlib.Path, *, max_rows: int | None) -> Iterator[bytes] | None:
+    """The multiset of `.shp` record contents (order-insensitive, constant memory).
 
     The 8-byte record header (record number, content length) is left out: the
     number only says where a record sits. The content — shape type, the
@@ -490,7 +521,7 @@ def _shp_record_chunks(shp: pathlib.Path, *, max_rows: int) -> Iterator[bytes] |
     have made row reordering look like a geometry edit. The pairing residual
     this leaves is stated in `_dbf_row_chunks`.
     """
-    digests: list[bytes] = []
+    records = _Multiset()
     with shp.open("rb") as handle:
         handle.seek(_SHAPEFILE_HEADER_BYTES)
         while header := handle.read(8):
@@ -501,11 +532,10 @@ def _shp_record_chunks(shp: pathlib.Path, *, max_rows: int) -> Iterator[bytes] |
             content = handle.read(length)
             if words < 0 or len(content) != length:
                 raise DatasetReadError(f"{shp} ends inside a record")
-            digests.append(hashlib.sha256(content).digest())
-            if len(digests) > max_rows:
+            records.add(content)
+            if _over(records.count, max_rows):
                 return None
-    digests.sort()
-    return (digest.hex().encode("ascii") + b"\n" for digest in digests)
+    return records.chunks()
 
 
 #: WKT structural punctuation. Whitespace beside any of it is layout, not
@@ -677,7 +707,7 @@ def _geopackage_crs_text(connection: sqlite3.Connection) -> str | None:
 
 
 def _geopackage_attribute_chunks(
-    gpkg: pathlib.Path, *, max_rows: int
+    gpkg: pathlib.Path, *, max_rows: int | None
 ) -> Iterator[bytes] | None:
     """Every non-geometry value in every feature table, canonicalised.
 
@@ -691,10 +721,11 @@ def _geopackage_attribute_chunks(
     column itself still appears in the `structure` signal, so renaming or
     dropping it is a schema change and is still seen.
 
-    Rows are SORTED by their serialised value rather than left in rowid order.
+    Rows are combined as a multiset (`_Multiset`) rather than in rowid order.
     A rewrite that renumbers or reorders rows without changing any value is a
-    re-save, and ordering by rowid would report it as an edit. Sorting is why
-    the row ceiling exists: the table has to be materialised to sort it.
+    re-save, and ordering by rowid would report it as an edit. Until 24 Oct
+    2026 they were sorted, which held the table in memory and needed a row
+    ceiling; the multiset streams the cursor in constant memory.
     """
     with contextlib.closing(_open_geopackage(gpkg)) as connection:
         feature_tables = _geopackage_feature_tables(connection)
@@ -704,7 +735,7 @@ def _geopackage_attribute_chunks(
         if not _geopackage_within_rows(connection, feature_tables, max_rows):
             return None
 
-        serialised: list[str] = []
+        rows = _Multiset()
         for table in feature_tables:
             excluded = _geopackage_geometry_columns(
                 connection, table
@@ -715,33 +746,28 @@ def _geopackage_attribute_chunks(
                 continue
             quoted_table = table.replace('"', '""')
             quoted_columns = ", ".join(f'"{n}"' for n in (c.replace('"', '""') for c in wanted))
-            rows = connection.execute(
-                f'SELECT {quoted_columns} FROM "{quoted_table}"'
-            ).fetchall()
-            for row in rows:
-                serialised.append(
+            for row in connection.execute(f'SELECT {quoted_columns} FROM "{quoted_table}"'):
+                rows.add(
                     json.dumps(
                         [table, [_jsonable(value) for value in row]],
                         sort_keys=True,
                         separators=(",", ":"),
                         ensure_ascii=True,
-                    )
+                    ).encode("utf-8")
                 )
 
-    serialised.sort()
-    return (line.encode("utf-8") + b"\n" for line in serialised)
+    return rows.chunks()
 
 
 def _geopackage_geometry_chunks(
-    gpkg: pathlib.Path, *, max_rows: int
+    gpkg: pathlib.Path, *, max_rows: int | None
 ) -> Iterator[bytes] | None:
-    """One digest per geometry value, sorted, each on its own line.
+    """The multiset of geometry values (order-insensitive, constant memory).
 
-    Sorted for the reason the attribute digest is: a rewrite that renumbers or
-    reorders rows is a re-save. Each row is reduced to a fixed 32-byte digest
-    first, so sorting costs 64 bytes a row rather than the geometry itself.
+    Order-free for the reason the attribute digest is: a rewrite that renumbers
+    or reorders rows is a re-save.
 
-    The known residual, which sorting creates and the attribute digest shares:
+    The known residual, which order-freedom creates and the attribute digest shares:
     two features swapping geometries with nothing else changed is invisible,
     because neither digest pairs a shape with its row.
     """
@@ -752,7 +778,7 @@ def _geopackage_geometry_chunks(
         if not _geopackage_within_rows(connection, feature_tables, max_rows):
             return None
 
-        digests: list[str] = []
+        geometries = _Multiset()
         for table in feature_tables:
             quoted_table = table.replace('"', '""')
             for column in sorted(_geopackage_geometry_columns(connection, table)):
@@ -764,13 +790,10 @@ def _geopackage_geometry_chunks(
                     wkb = _gpkg_blob_wkb(value)
                     if wkb is None:
                         return None
-                    digest = hashlib.sha256()
-                    for part in (table.encode("utf-8"), column.encode("utf-8"), wkb):
-                        digest.update(part + b"\x00")
-                    digests.append(digest.hexdigest())
+                    geometries.add(table.encode("utf-8") + b"\x00",
+                                   column.encode("utf-8") + b"\x00", wkb + b"\x00")
 
-    digests.sort()
-    return (line.encode("ascii") + b"\n" for line in digests)
+    return geometries.chunks()
 
 
 def _gpkg_blob_wkb(value: object) -> bytes | None:
@@ -797,9 +820,11 @@ def _gpkg_blob_wkb(value: object) -> bytes | None:
 
 
 def _geopackage_within_rows(
-    connection: sqlite3.Connection, tables: Sequence[str], max_rows: int
+    connection: sqlite3.Connection, tables: Sequence[str], max_rows: int | None
 ) -> bool:
     """Whether every table can be counted and the total fits under `max_rows`."""
+    if max_rows is None:
+        return True
     total = 0
     for table in tables:
         count = _geopackage_count(connection, table)

@@ -1,0 +1,24 @@
+{
+  "versions": {
+    "qgis_version": "4.2.3",
+    "os_info": "Linux-7.2.11-1-cachyos-x86_64-with-glibc2.44",
+    "python_version": "3.14.9",
+    "gdal_version": "3.13.3",
+    "proj_version": "9.9",
+    "geos_version": "3.14.1",
+    "qgis_version_full": "4.2.3-Bel\u00e9m do Par\u00e1",
+    "qt_version": "6.11.2",
+    "pyqt_version": "6.11.0"
+  },
+  "score": 70.0,
+  "band": "MODERATE",
+  "components": {
+    "input_exists": 0.0,
+    "input_unchanged": 100.0,
+    "algorithm_available": 100.0,
+    "environment_similar": 100.0,
+    "parameters_valid": 100.0
+  },
+  "excluded": [],
+  "report": "Reproducibility Audit Report\n\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\nWorkflow: Buffer, then Clip\nSteps audited: 2\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u26a0\ufe0f  Input data exists:       0/2 (  0%)  \u2190 roads.shp is no longer where we left it\n\u2705 Input data unchanged:    1/1 (100%)\n\u2705 Algorithms available:    2/2 (100%)\n\u2705 Environment similar:     2/2 (100%)\n\u2705 Parameters valid:        2/2 (100%)\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nOVERALL REPRODUCIBILITY SCORE: 70/100 (MODERATE)"
+}

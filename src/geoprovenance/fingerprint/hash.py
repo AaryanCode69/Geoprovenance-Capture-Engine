@@ -399,8 +399,12 @@ GEOMETRY_ALGORITHM = "geoprovenance/geometry/1"
 #: nodata spelling and pixel-is-point georeferencing (structure/raster/2). Bumping, rather than adding a strategy name, is
 #: safe only because v0.1.0 was never released: no record outside this
 #: repository's own regenerated fixtures carries a /1 value.
-GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/2"
-ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/3"
+#: Bumped again the same day (geometry_content/3, attributes/4) when the
+#: per-row digests stopped being sorted and became an AdHash multiset sum
+#: (`readers._Multiset`): the E3 benchmark showed that sorting's row ceiling
+#: left every vector file over 100,000 features without either signal.
+GEOMETRY_CONTENT_ALGORITHM = "geoprovenance/geometry_content/3"
+ATTRIBUTES_ALGORITHM = "geoprovenance/attributes/4"
 #: A raster's structure is a different payload from a vector's, so it carries
 #: its own tag: a raster and a vector can never produce comparable structures.
 RASTER_STRUCTURE_ALGORITHM = "geoprovenance/structure/raster/2"
@@ -420,7 +424,7 @@ def complementary_fingerprints(
     path: str | pathlib.Path,
     *,
     description: readers.DatasetDescription | None = None,
-    max_attribute_rows: int = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
+    max_attribute_rows: int | None = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
 ) -> list[Fingerprint]:
     """The signals that make a byte hash interpretable. Never raises.
 
@@ -543,7 +547,7 @@ def fingerprint_dataset(
     height: int | None = None,
     pixel_size: Sequence[float] | None = None,
     threshold_bytes: int = LARGE_FILE_THRESHOLD_BYTES,
-    max_attribute_rows: int = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
+    max_attribute_rows: int | None = readers.DEFAULT_MAX_ATTRIBUTE_ROWS,
 ) -> list[Fingerprint]:
     """Every fingerprint for one dataset: the primary one, plus what can be read.
 

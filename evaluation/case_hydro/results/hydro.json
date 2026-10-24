@@ -48,7 +48,7 @@
     "registry_snapshot_algorithms": [
       772
     ],
-    "db_bytes": 348160
+    "db_bytes": 352256
   },
   "baseline": {
     "watershed_km2": 1503.8969000000002,

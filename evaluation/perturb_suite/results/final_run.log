@@ -1,3 +1,29 @@
+Warning 6: Normalized/laundered field name: 'source_scene' to 'source_sce'
+Warning 1: Value 'site_00' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_01' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_02' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_03' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_04' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_05' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_06' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_07' of field retyped.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field retyped.category parsed incompletely to integer 0.
+Warning 1: Value 'site_00' of field sample_areas.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field sample_areas.category parsed incompletely to integer 0.
+Warning 1: Value 'site_01' of field sample_areas.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field sample_areas.category parsed incompletely to integer 0.
+Warning 1: Value 'site_02' of field sample_areas.name parsed incompletely to integer 0.
+Warning 1: Value 'urban' of field sample_areas.category parsed incompletely to integer 0.
+Warning 1: Value 'site_03' of field sample_areas.name parsed incompletely to integer 0.
+Warning 1: Value 'rural' of field sample_areas.category parsed incompletely to integer 0.
+/home/aaryan/Documents/Course-Project/evaluation/perturb_suite/run_suite.py:384: DeprecationWarning: QgsRasterFileWriter.writeRaster() is deprecated: Since 3.8. Use version with transformContext instead.
   error = writer.writeRaster(pipe, provider.xSize(), provider.ySize(), provider.extent(), provider.crs())
 Shapefile  s1 resave          v_resave_gdal      t1: unchanged  <-- MISMATCH
 Shapefile  s1 resave          v_resave_qgis      t1: unchanged  <-- MISMATCH

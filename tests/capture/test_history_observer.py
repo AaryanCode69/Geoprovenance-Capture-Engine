@@ -414,3 +414,36 @@ def test_a_failing_lookup_never_costs_the_record(tmp_path):
 def test_results_are_parsed_when_present():
     parsed = h.parse_history_entry({"algorithm_id": "a:b", "parameters": {}, "results": {"OUTPUT": "/x"}})
     assert parsed["results"] == {"OUTPUT": "/x"}
+
+
+def test_an_empty_qgis4_envelope_is_unwrapped_to_no_parameters():
+    """E7, QGIS 4.2.3: a model with no inputs is logged with "inputs": {}."""
+    parsed = h.parse_history_entry({
+        "algorithm_id": "demo_vector_1",
+        "parameters": {"area_units": "m2", "distance_units": "meters",
+                       "ellipsoid": "NONE", "inputs": {}},
+    })
+    assert parsed["parameters"] == {}
+
+
+def test_a_real_parameter_named_inputs_is_not_mistaken_for_the_envelope():
+    parsed = h.parse_history_entry({
+        "algorithm_id": "x:y", "parameters": {"inputs": {}, "DISTANCE": 5}})
+    assert parsed["parameters"] == {"inputs": {}, "DISTANCE": 5}
+
+
+@pytest.mark.parametrize("version, safe", [(33406, False), (33800, False), (40000, True),
+                                           (40203, True), (None, False)])
+def test_the_history_signal_is_only_connected_where_it_was_measured_safe(version, safe):
+    """QGIS 3.34.6 segfaults on any Python slot on entryAdded (E7)."""
+    assert h.signal_is_safe(version) is safe
+
+
+def test_a_qgis334_null_envelope_is_unwrapped_to_no_parameters():
+    """E7, QGIS 3.34.6: the same model run is logged with "inputs": null."""
+    parsed = h.parse_history_entry({
+        "algorithm_id": "demo_vector_1",
+        "parameters": {"area_units": "m2", "distance_units": "meters",
+                       "ellipsoid": "NONE", "inputs": None},
+    })
+    assert parsed["parameters"] == {}

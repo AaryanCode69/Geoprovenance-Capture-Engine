@@ -1,9 +1,9 @@
 [general]
 name=GeoProvenance
-qgisMinimumVersion=3.28
+qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 description=Automatic W3C PROV-O provenance capture and reproducibility auditing for QGIS Processing workflows
-version=0.1.0
+version=1.0.0
 author=Aaryan Upadhyay, Saniya Goyal, Dibyendu De
 email=aaryanupadhyay68@gmail.com
 
@@ -24,19 +24,14 @@ deprecated=False
 # Person A owns this file. RULES.md §2.5 — any API newer than the floor below
 # must be feature-detected at runtime, not assumed.
 #
-# qgisMinimumVersion was 3.34 (the LTS this project targets). Lowered to 3.28 on
-# 24 Aug 2026 so the Flathub 3.28.9 LTS build could load it — but that build
-# could NOT be installed (its end-of-life runtime fails to download from every
-# Flathub mirror), so no 3.x release has run this plugin. Every in-QGIS result
-# recorded in docs/capture_coverage.md is from QGIS 4.2.1. Nothing has been
-# verified against 3.28 or 3.34.
-#
-# The 3.28 floor is still safe for the code as written: the newest QGIS API this
-# plugin touches is QgsHistoryProviderRegistry and its entryAdded signal
-# (capture/history_observer.py), both introduced in QGIS 3.24.
-#
-# Raise this back to 3.34 once a 3.34+ build has been tested. Findings measured
-# on 4.2.1 do not transfer to 3.x unverified.
+# qgisMinimumVersion is 3.34, the LTS this project targets (raised back from
+# 3.28 on 24 Oct 2026). It was lowered to 3.28 on 24 Aug 2026 for a Flathub
+# 3.28.9 build that could never be installed. 3.34.6 has now run the plugin:
+# the QGIS-hosted suite passes there and on 4.2.3, and E7 drove all four
+# invocation paths on both (evaluation/completeness/). One 3.34 finding is
+# handled in code: a Python slot on QgsHistoryProviderRegistry.entryAdded
+# crashes 3.34.6, so below QGIS 4 the history channel polls instead
+# (capture/history_observer.py, signal_is_safe).
 #
 # qgisMaximumVersion is declared EXPLICITLY and must stay that way. When it is
 # absent QGIS does not mean "no ceiling" — it derives one, by taking the FIRST
@@ -47,7 +42,7 @@ deprecated=False
 #         if not qgisMaximumVersion:
 #             qgisMaximumVersion = qgisMinimumVersion[0] + ".99"
 #
-# With qgisMinimumVersion=3.28 that is "3" + ".99" = 3.99, so QGIS 4.2.1 marked
+# With qgisMinimumVersion=3.34 that is "3" + ".99" = 3.99, so QGIS 4.2.1 marked
 # this plugin `incompatible` — "Plugin designed for QGIS 3.28 - 3.99" — and put
 # it in the Plugin Manager's Invalid tab instead of the Installed one. Measured
 # 26 Aug 2026. The window below spans the 3.x LTS this project targets and the

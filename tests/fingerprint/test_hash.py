@@ -700,9 +700,9 @@ def test_structure_and_geometry_claim_no_byte_coverage():
     assert by_strategy["structure"].file_size_bytes is None
     assert by_strategy["geometry"].file_size_bytes is None
     assert by_strategy["file"].file_size_bytes == 324
-    # Since 24 Oct 2026 (C1) the attribute payload is one 64-hex-digit digest
-    # per live .dbf row plus a newline, so its size counts rows, not the file.
-    assert by_strategy["attributes"].file_size_bytes == 8 * 65
+    # Since 24 Oct 2026 the attribute payload is the multiset digest
+    # "<rows>:<2048-bit sum in hex>\n", so its size is fixed, not the file's.
+    assert by_strategy["attributes"].file_size_bytes == len("8:") + 512 + 1
 
 
 def test_the_digest_recipe_travels_inside_the_hash():

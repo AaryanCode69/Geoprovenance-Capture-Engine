@@ -453,6 +453,18 @@ def _bucket_timestamp(started_at: str) -> str:
     return moment.replace(microsecond=(moment.microsecond // step) * step).isoformat()
 
 
+def _empty_as_none(value: Any) -> Any:
+    """An empty list or map, keyed the same as no value at all.
+
+    The Toolbox passes an unset multi-field parameter as ``[]``; QGIS 3.34.6
+    writes the same run's history entry with ``null`` (measured in E7, on
+    ``native:dissolve``'s FIELD). Same run, two spellings of "nothing", and
+    the job was written twice. Only the dedup view is changed, never what is
+    stored.
+    """
+    return None if value in ([], {}) else value
+
+
 def dedup_parameters(event: dict, raw_parameters: Any = None) -> dict[str, Any]:
     """The parameter view every channel can agree on (§5.9).
 
@@ -489,8 +501,19 @@ def dedup_parameters(event: dict, raw_parameters: Any = None) -> dict[str, Any]:
         # Flattened, because the channels do not hand over the same TYPES
         # either: the Toolbox passes OUTPUT as a QgsProcessingOutputLayerDefinition
         # where the history entry holds its plain sink path (measured on QGIS
-        # 4.2.3, E7), so every Toolbox job was written twice.
-        return flatten_parameters(raw_parameters)
+        # 4.2.3, E7), so every Toolbox job was written twice. And once a
+        # job's output is loaded into the project, the Toolbox names it in the
+        # NEXT job by its layer id ("roads_buffered_589c…") where the history
+        # entry holds the file path, so every resolved input and output is
+        # keyed by the path the split already worked out for it.
+        merged = {key: _empty_as_none(value) for key, value in flatten_parameters(raw_parameters).items()}
+        for entry in (event.get("inputs") or []) + (event.get("outputs") or []):
+            try:
+                if entry.get("path") and str(entry["param"]) in merged:
+                    merged[str(entry["param"])] = entry["path"]
+            except Exception:  # noqa: BLE001 — §5.5, a malformed entry is not fatal
+                continue
+        return merged
 
     merged: dict[str, Any] = dict(event.get("parameters") or {})
     for entry in (event.get("inputs") or []) + (event.get("outputs") or []):

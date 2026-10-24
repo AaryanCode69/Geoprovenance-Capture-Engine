@@ -50,6 +50,14 @@ def make_iface():
     from qgis.PyQt.QtWidgets import QMainWindow
     import qgis.utils
 
+    # On QGIS 3.34 (PyQt5) the stub's @pyqtSlot("QList<QgsMapLayer*>") cannot
+    # be matched to QgsProject.layersAdded outside pytest; connected as a plain
+    # callable it behaves the same.
+    if hasattr(QgisInterface.addLayers, "__pyqtSignature__"):
+        try:
+            del QgisInterface.addLayers.__pyqtSignature__
+        except (AttributeError, TypeError):
+            pass
     window = QMainWindow()
     canvas = QgsMapCanvas(window)
     iface = QgisInterface(canvas, MockMessageBar(), window)
@@ -94,4 +102,8 @@ def versions() -> dict[str, str]:
     probe = environment.probe()
     probe.pop("plugin_versions", None)
     probe["qgis_version_full"] = Qgis.QGIS_VERSION
+    from qgis.PyQt.QtCore import PYQT_VERSION_STR, QT_VERSION_STR
+
+    probe["qt_version"] = QT_VERSION_STR
+    probe["pyqt_version"] = PYQT_VERSION_STR
     return probe

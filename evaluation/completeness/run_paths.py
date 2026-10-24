@@ -83,8 +83,11 @@ def workflows(out: pathlib.Path) -> dict[str, list[tuple[str, dict]]]:
         ("gdal:warpreproject", {"INPUT": str(h / "dem_clip.tif"), "TARGET_CRS": "EPSG:32644",
                                 "RESAMPLING": 1, "TARGET_RESOLUTION": 30.0, "DATA_TYPE": 0,
                                 "OUTPUT": str(h / "dem_utm.tif")}),
-        ("native:fillsinkswangliu", {"INPUT": str(h / "dem_utm.tif"), "BAND": 1, "MIN_SLOPE": 0.01,
-                                     "OUTPUT_FILLED_DEM": str(h / "dem_filled.tif")}),
+        # gdal:slope rather than case study 2's native:fillsinkswangliu, which
+        # QGIS 3.34 does not have: every path must run the same steps on both.
+        ("gdal:slope", {"INPUT": str(h / "dem_utm.tif"), "BAND": 1, "SCALE": 1.0,
+                        "AS_PERCENT": False, "COMPUTE_EDGES": True, "ZEVENBERGEN": False,
+                        "OUTPUT": str(h / "slope.tif")}),
     ]
     return {"demo_vector": demo, "coastal_raster": coast, "hydro_raster": hydro}
 
@@ -109,6 +112,14 @@ def _wait_for_tasks(timeout=600):
     raise TimeoutError("Processing tasks did not finish")
 
 
+def _close(dialog):
+    """QGIS 3.34's dialog deletes itself when a run finishes; 4.2's does not."""
+    try:
+        dialog.close()
+    except RuntimeError:
+        pass
+
+
 def run_script(steps):
     import processing
 
@@ -123,7 +134,7 @@ def run_toolbox(steps):
         dialog = processing.createAlgorithmDialog(alg, params)
         dialog.runAlgorithm()
         _wait_for_tasks()
-        dialog.close()
+        _close(dialog)
 
 
 def run_batch(steps):
@@ -151,7 +162,7 @@ def run_batch(steps):
             panel.tblParameters.cellWidget(1, column).setValue(params[out.name()])
         dialog.runAlgorithm()
         _wait_for_tasks()
-        dialog.close()
+        _close(dialog)
 
 
 def run_modeler(steps, name):
@@ -177,7 +188,7 @@ def run_modeler(steps, name):
     dialog = processing.createAlgorithmDialog(model, {})
     dialog.runAlgorithm()
     _wait_for_tasks()
-    dialog.close()
+    _close(dialog)
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +246,10 @@ def main() -> int:
                            if k.startswith("OUTPUT") and isinstance(v, str)]
                 ran = sum(1 for o in outputs if pathlib.Path(o).exists())
                 recorded_steps = [r for r in rows if r["algorithm_id"] in step_ids]
-                recorded_model = [r for r in rows if r["algorithm_id"].startswith("model")]
+                # A model job is recorded under the model's own id ("<name>" or
+                # "model:<name>" depending on the QGIS version), not "model…".
+                model_name = f"{wf_name}_{repeat}"
+                recorded_model = [r for r in rows if r["algorithm_id"].split(":")[-1] == model_name]
                 results.append({
                     "path": path, "repeat": repeat, "workflow": wf_name,
                     "steps": len(steps), "outputs_written": ran,

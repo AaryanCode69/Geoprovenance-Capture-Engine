@@ -37,7 +37,7 @@
     "registry_snapshot_algorithms": [
       772
     ],
-    "db_bytes": 454656
+    "db_bytes": 458752
   },
   "paths": {
     "shoreline_2015": "run/baseline/2015_shoreline.gpkg",

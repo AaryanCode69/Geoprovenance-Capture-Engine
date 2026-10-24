@@ -8,4 +8,5 @@
 *.aux.xml
 */hooks/
 */work/
-*/work/
+overhead/data/
+figures/work/

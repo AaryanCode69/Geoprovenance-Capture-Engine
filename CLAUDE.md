@@ -37,7 +37,16 @@ The user is **Person A — Capture Engine & Storage**. One of three developers.
 
 ## 3. Current state of the repository
 
-**Built and passing — 537 tests, `make test`, no QGIS required:**
+> **Array Part B, 24 Oct 2026 — read first; it supersedes older lines below where they conflict.**
+> Built under a third explicit override of RULES.md §1.2 (B/C modules: `fingerprint/`, `prov.py`, `audit.py`, `ui/`), on branch `array-part-b`, committed locally, not pushed.
+> - **Tests:** 635 without QGIS (`make test`, 1 skipped); the QGIS-hosted suite (18) passes on **QGIS 4.2.3 and 3.34.6**, both installed with micromamba (`evaluation/ENVIRONMENT.md`). `metadata.txt` is back to `qgisMinimumVersion=3.34`, version 1.0.0.
+> - **Schema v3** (`MIGRATIONS[3]`): agent library versions + `capabilities_json`, `activities.parameter_definitions_json`, `registry_snapshots`. Every output gets `wasAttributedTo`; fixtures have 87 relations.
+> - **Five channels:** `batch` added (batch rows reached no other channel). Model steps recorded from `modelResult()` on QGIS ≥ 3.38. **On QGIS 3.x the history signal is NOT connected** — any Python slot on `entryAdded` segfaults 3.34.6; polling covers it. The post-execution hook fires on neither release.
+> - **Fingerprints:** stdlib GeoTIFF reader + `pixel_content`/`pixels_changed`; vector content digests are AdHash multisets over SHAKE-256 (2048 bit), order-insensitive, constant memory, **no row ceiling** (`geometry_content/3`, `attributes/4`).
+> - **Dedup** keys on flattened, path-resolved parameters with `[]`/`{}` read as null, matched by interval overlap.
+> - **Evaluation:** `evaluation/` holds every script and raw result behind the Array manuscript; `evaluation/run_all.sh` re-runs all of it. `docs/capture_coverage.md` has the E7 summary at the top.
+
+**Built and passing at v0.1.0 — 537 tests, `make test`, no QGIS required:**
 
 - `storage/schema.sql` — 8 tables, 9 indices, `user_version = 2`. Draft, not yet `contract-v1` (no tag exists; the file still says "change it freely until then").
   **v2, 26 Aug 2026:** `fingerprints` UNIQUE became `(entity_id, hash_strategy, computed_at)` — *one fingerprint per file, per method, per instant* — with `hash_strategy NOT NULL DEFAULT 'file'`. The old key's stated rationale was wrong and is retracted in `docs/CONTRACT_schema.md` §"The fingerprints key" and in `RULES.md` Appendix B.4: an input and an output are different entities and never collide at any resolution. The real defect was that row identity depended on clock granularity — 13 rejections in 30 runs on Windows — and that complementary measurements of one file were rejected as duplicates of each other.

@@ -247,10 +247,29 @@ def test_the_shapefile_attribute_payload_ignores_row_order(shapefile: pathlib.Pa
     assert b"".join(readers.attribute_chunks(shapefile)) == before
 
 
-def test_the_shapefile_attribute_payload_has_one_line_per_row(shapefile: pathlib.Path):
-    lines = b"".join(readers.attribute_chunks(shapefile)).splitlines()
-    assert len(lines) == 8
-    assert lines == sorted(lines)
+def test_the_shapefile_attribute_payload_counts_every_row(shapefile: pathlib.Path):
+    """One multiset over the rows: its count, then the 2048-bit sum."""
+    count, total = b"".join(readers.attribute_chunks(shapefile)).decode().strip().split(":")
+    assert count == "8"
+    assert len(total) == readers.MULTISET_BITS // 4
+
+
+def test_the_multiset_ignores_order_and_counts_repeats():
+    """Addition commutes; a repeated row is two rows, never zero (XOR would cancel)."""
+    def digest(*rows):
+        m = readers._Multiset()
+        for row in rows:
+            m.add(row)
+        return b"".join(m.chunks())
+
+    assert digest(b"a", b"b", b"c") == digest(b"c", b"a", b"b")
+    assert digest(b"a", b"a") != digest() and digest(b"a", b"a") != digest(b"a")
+    assert digest(b"a", b"b") != digest(b"a", b"c")
+
+
+def test_a_large_table_is_digested_without_a_row_ceiling(tmp_path: pathlib.Path):
+    """E3: until 24 Oct 2026 no content signal was produced above 100,000 rows."""
+    assert readers.DEFAULT_MAX_ATTRIBUTE_ROWS is None
 
 
 def test_a_numeric_value_padded_differently_is_the_same_value():
@@ -270,7 +289,7 @@ def test_a_deleted_dbf_row_is_not_data(shapefile: pathlib.Path):
     raw[header_length] = ord("*")
     dbf.write_bytes(bytes(raw))
     after = b"".join(readers.attribute_chunks(shapefile))
-    assert len(after.splitlines()) == 7 and after != before
+    assert after.startswith(b"7:") and after != before
 
 
 def test_the_dbf_last_written_date_is_blanked_before_hashing(
@@ -299,9 +318,20 @@ def test_the_geopackage_attribute_payload_excludes_geometry(
     and a geometry edit would move the same value again — which is the failure
     being fixed.
     """
-    payload = b"".join(readers.attribute_chunks(geopackage))
-    assert b"site_00" in payload
-    assert b"GP\x00\x01".hex().encode() not in payload
+    rows: list[bytes] = []
+    original = readers._Multiset.add
+
+    def spy(self, *parts):
+        rows.append(b"".join(parts))
+        return original(self, *parts)
+
+    readers._Multiset.add = spy
+    try:
+        b"".join(readers.attribute_chunks(geopackage))
+    finally:
+        readers._Multiset.add = original
+    assert any(b"site_00" in row for row in rows)
+    assert not any(b"GP\x00" in row for row in rows)
 
 
 def test_the_geopackage_attribute_payload_is_row_order_independent(
@@ -309,8 +339,8 @@ def test_the_geopackage_attribute_payload_is_row_order_independent(
 ):
     """A rewrite that renumbers rows without changing a value is a re-save.
 
-    Rows are sorted by their serialised value before hashing, so re-inserting
-    the same data in a different order does not read as an edit.
+    Rows are combined as a multiset, so re-inserting the same data in a
+    different order does not read as an edit.
     """
     before = b"".join(readers.attribute_chunks(geopackage))
     connection = sqlite3.connect(geopackage)

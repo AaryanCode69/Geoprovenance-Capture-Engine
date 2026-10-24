@@ -91,6 +91,14 @@ _RESULT_KEYS = ("results", "outputs")
 #: channels become one row with a corroboration instead of two rows.
 _PARAMETER_WRAPPER_KEYS = ("inputs",)
 
+#: The keys QGIS 4 puts BESIDE "inputs" in that envelope. An algorithm run with
+#: no parameters at all — a Processing model with no inputs, measured on QGIS
+#: 4.2.3 in E7 — has an EMPTY "inputs", which the non-empty test below skipped,
+#: so the envelope itself was recorded as the parameters and the run was
+#: written twice. An empty envelope is unwrapped only when nothing else is in
+#: it, so a real parameter named "inputs" is never mistaken for one.
+_ENVELOPE_KEYS = frozenset({"area_units", "distance_units", "ellipsoid", "project_path"})
+
 #: Last resort: dig the algorithm id out of the recorded command string,
 #: e.g. processing.run("native:buffer", {...}).
 _COMMAND_ALGORITHM = re.compile(r"""run\s*\(\s*["']([^"']+)["']""")
@@ -163,6 +171,10 @@ def _unwrap_parameters(parameters: dict) -> dict:
         inner = parameters.get(key)
         if isinstance(inner, dict) and inner:
             return inner
+        # QGIS 3.34.6 writes the empty envelope as "inputs": null (E7).
+        if (key in parameters and (inner is None or isinstance(inner, dict))
+                and set(parameters) - {key} <= _ENVELOPE_KEYS):
+            return inner or {}
     return parameters
 
 
@@ -444,6 +456,31 @@ def _live_definitions(algorithm_id: str) -> dict | None:
     return parameter_definitions(algorithm)
 
 
+def signal_is_safe(qgis_version_int: int | None) -> bool:
+    """Whether connecting a Python slot to entryAdded is safe on this QGIS.
+
+    Measured 24 Oct 2026 (E7): on QGIS 3.34.6 (PyQt5) ANY Python slot on
+    ``QgsHistoryProviderRegistry.entryAdded`` — even one that only prints —
+    segfaults QGIS the moment the Toolbox writes its history entry, before the
+    slot's first line runs: the crash is in converting the signal's arguments,
+    not in this plugin's code. §5.1 outranks capture, so below QGIS 4 the
+    signal is left alone and the polling sweep, which reads the same entries
+    through ``queryEntries()`` and was measured safe there, does the job. A
+    version test rather than feature detection (§2.5) because the feature is
+    present and the only probe is the crash itself. Unknown version: unsafe.
+    """
+    return qgis_version_int is not None and qgis_version_int >= 40000
+
+
+def _qgis_version_int() -> int | None:
+    try:
+        from qgis.core import Qgis
+
+        return int(Qgis.QGIS_VERSION_INT)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def install_history_observer(
     engine: ProvenanceCaptureEngine,
 ) -> list[tuple[str, Callable[[], None]]]:
@@ -495,12 +532,21 @@ def install_history_observer(
         except Exception as exc:  # noqa: BLE001 — §5.1 [HARD] never raise into Qt
             log_exception("history entryAdded handler", exc)
 
-    try:
-        registry.entryAdded.connect(_on_entry_added)
-    except Exception as exc:  # noqa: BLE001 — §5.1
-        log(f"could not connect entryAdded ({type(exc).__name__}: {exc}) — "
-            f"the polling fallback below still covers this channel (§5.10)", WARNING)
+    version = _qgis_version_int()
+    if not signal_is_safe(version):
+        log(f"history entryAdded NOT connected on QGIS {version}: a Python slot on it "
+            f"crashes QGIS 3.34 (measured, E7); the polling sweep covers this channel",
+            INFO)
+        connected = False
     else:
+        try:
+            registry.entryAdded.connect(_on_entry_added)
+            connected = True
+        except Exception as exc:  # noqa: BLE001 — §5.1
+            log(f"could not connect entryAdded ({type(exc).__name__}: {exc}) — "
+                f"the polling fallback below still covers this channel (§5.10)", WARNING)
+            connected = False
+    if connected:
         def disconnect() -> None:
             try:
                 registry.entryAdded.disconnect(_on_entry_added)

@@ -39,7 +39,7 @@ from __future__ import annotations
 import datetime as dt
 import functools
 import pathlib
-from typing import Callable
+from typing import Any, Callable
 
 from ..log import CRITICAL, INFO, WARNING, log, log_exception
 from ..storage.store import utc_now_iso
@@ -243,7 +243,7 @@ def handle_post_execution(scope: dict) -> None:
             algorithm_id=facts["algorithm_id"],
             algorithm_name=facts["algorithm_name"],
             provider=facts["provider"],
-            parameters=scope.get("parameters"),
+            parameters=resolve_project_layers(scope.get("parameters")),
             parameter_definitions=parameter_definitions(algorithm),
             results=scope.get("results"),
             # A5 — the pre-execution hook left the start time in _pending_start.
@@ -406,7 +406,8 @@ def install_run_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]:
 
 
 def _observe(engine, algorithm_or_id, parameters, results, started_at, status,
-             *, source: str, context: str, branch: str | None = None) -> None:
+             *, source: str, context: str, branch: str | None = None,
+             processing_context: Any = None) -> None:
     """Record one observation from inside a running algorithm. NEVER raises.
 
     ``_record`` guards its own body, but §5.1 [HARD] is about what reaches the
@@ -420,11 +421,90 @@ def _observe(engine, algorithm_or_id, parameters, results, started_at, status,
             _note_toolbox_branch(branch)
         _record(engine, algorithm_or_id, parameters, results, started_at, status,
                 source=source, context=context)
+        if processing_context is not None:
+            _record_model_children(engine, algorithm_or_id, processing_context, started_at,
+                                   source=source, context=context)
     except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
         try:
             log_exception(context, exc)
         except Exception:  # noqa: BLE001 — logging must not be the thing that raises
             pass
+
+
+def _record_model_children(engine, model, processing_context, started_at,
+                           *, source: str, context: str) -> None:
+    """Record each step of a Processing model as a job of its own (added 24 Oct 2026).
+
+    Measured on QGIS 4.2.3 in E7: a model run from its dialog reaches the
+    Toolbox and history channels as ONE job, under the model's name, holding
+    the model's own parameters, and no channel sees its steps. A model whose
+    steps read and write files on their own therefore left no files and no
+    derivations in the record at all.
+
+    QGIS 3.38+ keeps each step's evaluated inputs and outputs on the context
+    (``QgsProcessingContext.modelResult().childResults()``), which is what is
+    read here, after the model has finished. Steps are recorded in dependency
+    order so the workflow's ordering follows the model's. They carry the
+    model's start time and no duration of their own, since QGIS does not keep
+    one per step. On QGIS 3.34 the API does not exist and only the model job
+    is recorded. Never raises (the caller guards it too).
+    """
+    try:
+        model_result = getattr(processing_context, "modelResult", None)
+        if model_result is None or not hasattr(model, "childAlgorithm"):
+            return
+        children = dict(model_result().childResults())
+        if not children:
+            return
+
+        def depth(child_id: str) -> int:
+            try:
+                return len(model.dependsOnChildAlgorithms(child_id))
+            except Exception:  # noqa: BLE001
+                return 0
+
+        for child_id in sorted(children, key=lambda c: (depth(c), c)):
+            result = children[child_id]
+            child = model.childAlgorithm(child_id)
+            algorithm = child.algorithm() or child.algorithmId()
+            failed = "fail" in str(result.executionStatus()).lower()
+            _record(engine, algorithm, dict(result.inputs()), dict(result.outputs()),
+                    started_at, "failed" if failed else "completed",
+                    source=source, context=f"{context} (model step {child_id})")
+    except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+        log_exception(f"{context}: recording the model's steps", exc)
+
+
+def resolve_project_layers(parameters: Any) -> Any:
+    """Replace every project layer id in ``parameters`` with that layer's source.
+
+    Once a job's output is loaded into the project, the Toolbox and batch
+    dialogs name it in the NEXT job by its layer id
+    ("roads_buffered_589c11af_…"), not by its path (measured on QGIS 4.2.3,
+    E7). Recorded as given, the next job's input was a file called
+    "roads_buffered_589c…" that exists nowhere, the chain from one job to the
+    next was broken, and the history channel's copy of the same job (which
+    holds the path) was not recognised as a duplicate. Never raises.
+    """
+    try:
+        from qgis.core import QgsProject
+
+        project = QgsProject.instance()
+
+        def resolve(value):
+            if isinstance(value, str):
+                layer = project.mapLayer(value)
+                return layer.source() if layer is not None else value
+            if isinstance(value, list):
+                return [resolve(v) for v in value]
+            return value
+
+        if not isinstance(parameters, dict):
+            return parameters
+        return {key: resolve(value) for key, value in parameters.items()}
+    except Exception as exc:  # noqa: BLE001 — §5.1 [HARD]
+        log_exception("could not resolve project layer ids", exc)
+        return parameters
 
 
 def _record(engine, algorithm_or_id, parameters, results, started_at, status,
@@ -447,7 +527,7 @@ def _record(engine, algorithm_or_id, parameters, results, started_at, status,
             algorithm_id=algorithm_id,
             algorithm_name=facts["algorithm_name"],
             provider=facts["provider"],
-            parameters=parameters,
+            parameters=resolve_project_layers(parameters),
             parameter_definitions=parameter_definitions(algorithm),
             results=results,
             started_at=started_at,
@@ -570,6 +650,7 @@ def _wrap_toolbox_task(engine, algorithm_widget, restores: list) -> None:
         task = original(algorithm, parameters, *args, **kwargs)
         try:
             started_at = utc_now_iso()
+            processing_context = args[0] if args else kwargs.get("context")
 
             def on_executed(ok, results=None):
                 _observe(
@@ -577,7 +658,7 @@ def _wrap_toolbox_task(engine, algorithm_widget, restores: list) -> None:
                     results if ok else None, started_at,
                     "completed" if ok else "failed",
                     source=TOOLBOX_SOURCE, context="Toolbox task wrapper",
-                    branch="threaded task",
+                    branch="threaded task", processing_context=processing_context,
                 )
 
             task.executed.connect(on_executed)
@@ -622,7 +703,8 @@ def _wrap_toolbox_execute(engine, algorithm_widget, restores: list) -> None:
         _observe(engine, alg, parameters, results if ok else None, started_at,
                  "completed" if ok else "failed",
                  source=TOOLBOX_SOURCE, context="Toolbox execute wrapper",
-                 branch="synchronous execute")
+                 branch="synchronous execute",
+                 processing_context=args[0] if args else kwargs.get("context"))
         # §5.2 — the caller unpacks exactly this pair.
         return ok, results
 
@@ -673,7 +755,7 @@ def install_batch_wrapper(engine: ProvenanceCaptureEngine) -> Callable[[], None]
     @functools.wraps(original)
     def wrapper(self, algorithm, context, feedback, parameters, *args, **kwargs):
         _observe(engine, algorithm, parameters, None, utc_now_iso(), "completed",
-                 source=BATCH_SOURCE, context="batch wrapper")
+                 source=BATCH_SOURCE, context="batch wrapper", processing_context=context)
         return original(self, algorithm, context, feedback, parameters, *args, **kwargs)
 
     wrapper._geoprovenance_wrapped = True  # noqa: SLF001
