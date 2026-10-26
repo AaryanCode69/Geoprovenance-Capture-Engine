@@ -46,11 +46,11 @@
     "steps": 49
   },
   "coastal_after_P3": {
-    "score": 99.5,
+    "score": 99.0,
     "band": "HIGH",
     "components": {
       "input_exists": 100.0,
-      "input_unchanged": 97.91666666666667,
+      "input_unchanged": 95.83333333333333,
       "algorithm_available": 100.0,
       "environment_similar": 100.0,
       "parameters_valid": 100.0
@@ -58,7 +58,8 @@
     "excluded": [],
     "reasons": {
       "input_unchanged": [
-        "recent_B3.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited."
+        "recent_B3.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited.",
+        "recent_B6.tif \u2014 The grid of this image is unchanged, but some of its cell values were edited."
       ]
     },
     "steps": 49

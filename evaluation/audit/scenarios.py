@@ -43,13 +43,13 @@ def _sidecars(path: pathlib.Path) -> list[pathlib.Path]:
     return [path.with_suffix(s) for s in (".shp", ".shx", ".dbf", ".prj", ".cpg") if path.with_suffix(s).exists()]
 
 
-def _audit(db: pathlib.Path, steps: int, swap: tuple[pathlib.Path, pathlib.Path] | None = None) -> dict:
-    """Audit with `swap = (recorded path, replacement)` in place, then restore."""
-    backup = None
-    if swap is not None:
-        target, replacement = swap
+def _audit(db: pathlib.Path, steps: int, *swaps: tuple[pathlib.Path, pathlib.Path]) -> dict:
+    """Audit with each `(recorded path, replacement)` in `swaps` in place, then restore."""
+    backups = []
+    for target, replacement in swaps:
         backup = target.with_name(target.name + ".audit-backup")
         shutil.copy2(target, backup)
+        backups.append((backup, target))
         shutil.copy2(replacement, target)
     try:
         store = ProvenanceStore(db)
@@ -67,8 +67,8 @@ def _audit(db: pathlib.Path, steps: int, swap: tuple[pathlib.Path, pathlib.Path]
         finally:
             store.close()
     finally:
-        if backup is not None:
-            shutil.copy2(backup, swap[0])
+        for backup, target in backups:
+            shutil.copy2(backup, target)
             backup.unlink()
 
 
@@ -80,8 +80,10 @@ def offline() -> dict:
         "coastal_unchanged_offline": _audit(COAST / "provenance.db", 49),
         "coastal_after_P1": _audit(COAST / "provenance.db", 49, (shore, perturb / "P1_1" / "2026_shoreline.gpkg")),
         "coastal_after_P2": _audit(COAST / "provenance.db", 49, (shore, perturb / "P2_1" / "2026_shoreline.gpkg")),
+        # P3 replaced the whole 2026 scene, so both of its bands are swapped.
         "coastal_after_P3": _audit(COAST / "provenance.db", 49,
-                                   (COAST / "data" / "recent_B3.tif", perturb / "P3_1" / "recent_B3.tif")),
+                                   (COAST / "data" / "recent_B3.tif", perturb / "P3_1" / "recent_B3.tif"),
+                                   (COAST / "data" / "recent_B6.tif", perturb / "P3_1" / "recent_B6.tif")),
         "hydro_after_H2": _audit(HYDRO / "provenance.db", 16,
                                  (HYDRO / "data" / "dem_window.tif", HYDRO / "run" / "H2" / "dem_window.tif")),
         "hydro_unchanged_offline": _audit(HYDRO / "provenance.db", 16),

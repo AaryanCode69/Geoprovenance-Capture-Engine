@@ -39,7 +39,8 @@ conda-forge had no 3.34.15 build that solved on this machine; 3.34.6 is the
 |---|---|---|
 | Kart (baseline B3) | 0.17.1 | release binary, `~/.local/opt/Kart-0.17.1-linux-x86_64/kart/kart` (override with `KART=`) |
 | geodiff (baseline B4) | 2.3.2 | `pygeodiff` in `gp-q42` |
-| mermaid-cli (diagrams) | 12.0.0 | `npx`, rendering through the system Chromium (`docs/Journal/array/figures/puppeteer.json`) |
+| mermaid-cli (Fig. 2) | 12.0.0 | `npx`, rendering through the system Chromium (`docs/Journal/array/figures/puppeteer.json`) |
+| Graphviz `dot` (Figs. 3, 7, 8) | 16.1.0 | system package; Liberation Sans font; ImageMagick `magick` flattens the PNGs to RGB |
 | Tectonic (manuscript) | 0.17.0 | standalone binary |
 | Development `.venv` | Python 3.10.21 | unit tests and the offline audits (no QGIS) |
 

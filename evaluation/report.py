@@ -4,7 +4,7 @@
 
 Reads only files under evaluation/ (and the junit XML of the test runs), and
 writes docs/Journal/array/generated/*.tex and docs/Journal/array/figures/
-{fig_confusion.png, fig_cost.png, fig_coastal_workflow.mmd, fig_hydro_tree.mmd}.
+{fig_confusion.png, fig_cost.png, fig_coastal_workflow.dot, fig_hydro_tree.dot}.
 No number in those files is typed by hand: each is computed here from a CSV,
 JSON, SQLite or XML file named in the code next to it. Running it twice on the
 same inputs gives identical text output.
@@ -496,7 +496,7 @@ def case1() -> None:
         algs = [a for (a,) in conn.execute(
             "SELECT a.algorithm_id FROM activities a JOIN workflow_activities wa ON wa.activity_id = a.id "
             "WHERE wa.workflow_id = ? ORDER BY wa.sequence_order", (wf,))]
-    _coastal_mermaid(algs)
+    _coastal_dot(algs)
 
 
 def _runs(algs: list[str]) -> list[tuple[str, int]]:
@@ -509,7 +509,16 @@ def _runs(algs: list[str]) -> list[tuple[str, int]]:
     return [(a, n) for a, n in out]
 
 
-def _coastal_mermaid(algs: list[str]) -> None:
+_DOT_HEAD = ['  graph [rankdir=TB, compound=true, nodesep=0.3, ranksep=0.14, fontname="Liberation Sans", fontsize=10, bgcolor=white, pad=0.15];',
+             '  node [fontname="Liberation Sans", fontsize=10, shape=box, style=filled, fillcolor="#eeeeee", color="#888888", margin="0.08,0.03", height=0.25];',
+             '  edge [fontname="Liberation Sans", fontsize=9, color="#555555", arrowsize=0.5];']
+
+
+def _dot_label(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _coastal_dot(algs: list[str]) -> None:
     # The chain per date starts at a raster clip and ends at the shoreline clip.
     starts = [i for i, a in enumerate(algs) if a == "gdal:cliprasterbyextent"
               and (i == 0 or algs[i - 1] != "gdal:cliprasterbyextent")]
@@ -524,33 +533,36 @@ def _coastal_mermaid(algs: list[str]) -> None:
     notes = {("date", "gdal:rastercalculator"): "MNDWI, then threshold t ◀ P2",
              ("date", "gdal:cliprasterbyextent"): "green + SWIR1 bands ◀ P3",
              ("date", "native:clip"): "= shoreline per date ◀ P1, P4, P5"}
-    lines = ['%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "18px"}, '
-             '"flowchart": {"curve": "basis", "nodeSpacing": 14, "rankSpacing": 26}}}%%',
-             "flowchart LR"]
+    # Two columns, so the figure stays legible at page width: the area of
+    # interest above the per-date chain, and the rate computation beside them.
+    lines = ["digraph coastal {"] + _DOT_HEAD
 
-    def chain(prefix: str, title: str, items: list[str], scope: str) -> list[str]:
-        out = [f'  subgraph {prefix}["{title}"]', "    direction TB"]
-        previous = None
+    def chain(prefix: str, title: str, items: list[str], scope: str):
+        out = [f"  subgraph cluster_{prefix} {{",
+               f'    label=<<B>{_dot_label(title)}</B>>; labeljust=l; style=filled; fillcolor="#fafafa"; color="#aaaaaa";']
+        names = []
         for i, (a, n) in enumerate(_runs(items)):
-            label = a + (f" ×{n}" if n > 1 else "")
+            label = _dot_label(a.removeprefix("native:") + (f" ×{n}" if n > 1 else ""))
             note = notes.get((scope, a))
             if note:
-                label += f"<br/><i>{note}</i>"
-            out.append(f'    {prefix}{i}["{label}"]')
-            if previous is not None:
-                out.append(f"    {previous} --> {prefix}{i}")
-            previous = f"{prefix}{i}"
-        out.append("  end")
-        return out, f"{prefix}0", previous
+                label += f'<BR/><I><FONT POINT-SIZE="9">{_dot_label(note)}</FONT></I>'
+            out.append(f"    {prefix}{i} [label=<{label}>];")
+            names.append(f"{prefix}{i}")
+        out += [f"    {a} -> {b};" for a, b in zip(names, names[1:])]
+        out.append("  }")
+        return out, names[0], names[-1]
 
     p, p_first, p_last = chain("A", f"Area of interest ({len(pre)} jobs)", pre, "pre")
     d, d_first, d_last = chain("D", f"Per date, run for 2015 and for 2026 ({per_date_len} jobs each)", date1, "date")
     r, r_first, r_last = chain("R", f"Rates ({len(rates)} jobs)", rates, "rates")
     lines += p + d + r
-    # Subgraph-to-subgraph links: Mermaid keeps each column top-to-bottom only
-    # when no edge enters a subgraph's own nodes from outside.
-    lines += ["  A --> D", "  D --> R", '  R --> OUT(["End Point Rate per transect, classified"])']
-    (FIG / "fig_coastal_workflow.mmd").write_text("\n".join(lines) + "\n")
+    # Arrows between columns end at the cluster borders, not on a node.
+    lines += [f"  {p_last} -> {d_first} [ltail=cluster_A, lhead=cluster_D];",
+              f"  {d_last} -> {r_first} [ltail=cluster_D, lhead=cluster_R, constraint=false];",
+              '  OUT [label="End Point Rate\\nper transect, classified", style="rounded,bold", fillcolor=white, color=black];',
+              f"  {r_last} -> OUT;",
+              "}"]
+    (FIG / "fig_coastal_workflow.dot").write_text("\n".join(lines) + "\n")
     macro("CoastPerDateJobs", count(per_date_len))
     macro("CoastPreJobs", count(len(pre)))
     macro("CoastRatesJobs", count(len(rates)))
@@ -572,7 +584,7 @@ def case2() -> None:
     macro("HydroDemItem", rf"\nolinkurl{{{h['source']['item']}}}")
     macro("HydroCollection", esc(h["source"]["collection"]))
     w = h["source"]["window_lonlat"]
-    macro("HydroWindow", f"{w[0]}--{w[2]}\\,°E, {w[1]}--{w[3]}\\,°N")
+    macro("HydroWindow", f"{w[0]}--{w[2]}\\,\\textdegree{{}}E, {w[1]}--{w[3]}\\,\\textdegree{{}}N")
     with sqlite3.connect(HERE / "case_hydro/provenance.db") as conn:
         wfs = conn.execute("SELECT workflow_id, count(*) FROM workflow_activities GROUP BY workflow_id").fetchall()
         # The baseline run is the first job of the session and the chain that follows it.
@@ -598,7 +610,7 @@ def case2() -> None:
     macro("HydroAllFiles", count(rec["files"]))
     assert set(rec["channels"]) == {"run_wrapper"}
     macro("HydroAlgorithms", ", ".join(rf"\code{{{esc(a)}}}" for a in dict.fromkeys(a for _, a in base_acts)))
-    _hydro_mermaid(base_acts, used, gen, entities)
+    _hydro_dot(base_acts, used, gen, entities)
 
     labels = {"H1": "DEM re-saved with Deflate compression and tiling",
               "H2": "DEM raised by 5\\,m on a 33 $\\times$ 33-cell block",
@@ -637,23 +649,23 @@ def case2() -> None:
     macro("HydroTrials", count(len(h["trials"])))
 
 
-def _hydro_mermaid(acts, used, gen, entities) -> None:
+def _hydro_dot(acts, used, gen, entities) -> None:
     """Files as boxes; each job is the labelled edge from what it read to what it wrote."""
     marks = {"dem_window.tif": "◀ H1, H2", "streams.gpkg": "◀ H3", "watershed.gpkg": "◀ H4"}
-    lines = ['%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "18px"}, '
-             '"flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 40}}}%%',
-             "flowchart TB"]
+    lines = ["digraph hydro {"] + _DOT_HEAD
     files = sorted({t for _, t in used} | {s for s, _ in gen}, key=lambda f: entities[f] or "")
     names = {f: f"F{i}" for i, f in enumerate(files)}
     for f in files:
         base = pathlib.PurePath(entities[f] or "memory").name
         mark = marks.get(base)
-        lines.append(f'  {names[f]}["{base}' + (f"<br/><b>{mark}</b>" if mark else "") + '"]')
+        label = _dot_label(base) + (f"<BR/><B>{_dot_label(mark)}</B>" if mark else "")
+        lines.append(f"  {names[f]} [label=<{label}>];")
     for aid, alg in acts:
         for f_in in [f for a, f in used if a == aid]:
             for f_out in [f for f, a in gen if a == aid]:
-                lines.append(f'  {names[f_in]} -- "{alg}" --> {names[f_out]}')
-    (FIG / "fig_hydro_tree.mmd").write_text("\n".join(lines) + "\n")
+                lines.append(f'  {names[f_in]} -> {names[f_out]} [label=" {alg}"];')
+    lines.append("}")
+    (FIG / "fig_hydro_tree.dot").write_text("\n".join(lines) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -665,10 +677,10 @@ def e6() -> None:
     order = [
         ("coastal_unchanged_offline", "Coastal workflow, unchanged, audited offline from the database"),
         ("coastal_after_P1", "Coastal workflow after P1 (re-save of the 2026 shoreline)"),
-        ("coastal_after_P2", "Coastal workflow after P2 (re-threshold)"),
-        ("coastal_after_P3", "Coastal workflow after P3 (other 2026 scene)"),
+        ("coastal_after_P2", "Coastal workflow after P2 (re-thresholded 2026 shoreline)"),
+        ("coastal_after_P3", "Coastal workflow after P3 (2026 scene replaced, both bands)"),
         ("coastal_audited_on_qgis_3_34", "Coastal workflow (QGIS 4.2.3) audited on QGIS 3.34.6"),
-        ("hydro_unchanged_offline", "Hydrology workflow, unchanged, audited offline"),
+        ("hydro_unchanged_offline", "Hydrology workflow (baseline and H3 runs), unchanged, audited offline"),
         ("hydro_after_H2", "Hydrology workflow after H2 (DEM edit)"),
     ]
     names = {"input_exists": "exists", "input_unchanged": "unchanged", "algorithm_available": "available",
@@ -689,6 +701,7 @@ def e6() -> None:
     macro("AuditHostGdal", q["gdal_version"])
     macro("AuditHostPython", q["python_version"])
     macro("AuditOfflinePython", a["_audit_host"]["python"])
+    macro("AuditHydroJobs", count(a["hydro_unchanged_offline"]["steps"]))
     p2 = a["coastal_after_P2"]["components"]["input_unchanged"]
     macro("AuditPtwoUnchanged", fmt(p2))
     panel = load("figures/results/panel.json")

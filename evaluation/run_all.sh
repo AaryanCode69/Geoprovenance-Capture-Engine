@@ -35,8 +35,9 @@ if [ "$1" != "report" ]; then
 fi
 step "report";                   "$HOME/.local/bin/micromamba" run -p "$HOME/micromamba/envs/gp-q42" python evaluation/report.py
 step "diagrams"
-for f in fig_coastal_workflow fig_hydro_tree fig2_architecture fig3_verdict_order; do
-  npx -y @mermaid-js/mermaid-cli@12.0.0 -q -p docs/Journal/array/figures/puppeteer.json \
-      -i docs/Journal/array/figures/$f.mmd -o docs/Journal/array/figures/$f.png -s 2 -b white
+npx -y @mermaid-js/mermaid-cli@12.0.0 -q -p docs/Journal/array/figures/puppeteer.json \
+    -i docs/Journal/array/figures/fig2_architecture.mmd -o docs/Journal/array/figures/fig2_architecture.png -s 2 -b white
+for f in fig_coastal_workflow fig_hydro_tree fig3_verdict_order; do
+  dot -Tpng -Gdpi=300 docs/Journal/array/figures/$f.dot | magick - -alpha remove -alpha off docs/Journal/array/figures/$f.png
 done
 step "done"
