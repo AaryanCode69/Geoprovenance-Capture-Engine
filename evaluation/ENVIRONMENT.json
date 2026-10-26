@@ -1,0 +1,6 @@
+{
+  "cpu": "13th Gen Intel(R) Core(TM) i7-13700HX",
+  "threads": 24,
+  "ram_gib": 15,
+  "os": "CachyOS Linux, Linux 7.2.11"
+}

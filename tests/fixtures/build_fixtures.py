@@ -135,6 +135,28 @@ def _relation(store: ProvenanceStore, *, relation_type: str, source_id: str,
     )
 
 
+def _attribute_outputs(store: ProvenanceStore) -> None:
+    """wasAttributedTo for every output, as the capture engine writes since v3.
+
+    Added 24 Oct 2026 (CLAIMS_TO_IMPLEMENT.md C3): an output file is attributed
+    to the environment its job ran in, once per file version. Derived here from
+    the relations already written — wasGeneratedBy says which job made the file,
+    wasAssociatedWith says where that job ran — so the three workflow builders
+    stay as they were and cannot disagree with this pass.
+    """
+    conn = store._connection()
+    rows = conn.execute(
+        "SELECT g.source_id AS entity, a.target_id AS agent, max(g.created_at) AS at "
+        "FROM relations g JOIN relations a "
+        "  ON a.source_id = g.target_id AND a.relation_type = 'wasAssociatedWith' "
+        "WHERE g.relation_type = 'wasGeneratedBy' "
+        "GROUP BY g.source_id, a.target_id ORDER BY g.source_id"
+    ).fetchall()
+    for entity, agent, at in rows:
+        _relation(store, relation_type="wasAttributedTo", source_id=entity,
+                  target_id=agent, created_at=at)
+
+
 def _agent(name: str, env: dict, store: ProvenanceStore, created_at: str) -> str:
     """An agent row with a deterministic id and the real §4.6 fingerprint."""
     return store.add_agent(
@@ -768,6 +790,7 @@ def main(out_dir: pathlib.Path | None = None) -> int:
         events += build_workflow_1(store, agent_334)
         events += build_workflow_2(store, agent_334)
         events += build_workflow_3(store, agent_340)
+        _attribute_outputs(store)
         counts = store.counts()
 
     # The committed database must be byte-identical on B's and C's machines

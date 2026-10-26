@@ -101,7 +101,11 @@ def test_the_probe_reports_measured_values_only():
     said out loud, rather than a plausible-looking number."""
     probe = environment.probe()
     assert set(probe) == {"qgis_version", "os_info", "python_version",
-                          "plugin_versions"}
+                          "plugin_versions", "gdal_version", "proj_version",
+                          "geos_version"}
+    # v3 (C2): the libraries are probed too, and off QGIS they say so.
+    assert probe["proj_version"] == environment.UNKNOWN
+    assert probe["geos_version"] == environment.UNKNOWN
     assert probe["qgis_version"] == environment.UNKNOWN
     assert probe["python_version"] == ".".join(
         str(part) for part in sys.version_info[:3]

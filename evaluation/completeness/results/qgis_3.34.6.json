@@ -1,0 +1,669 @@
+{
+  "versions": {
+    "qgis_version": "3.34.6",
+    "os_info": "Linux-7.2.11-1-cachyos-x86_64-with-glibc2.44",
+    "python_version": "3.12.15",
+    "gdal_version": "3.8.5",
+    "proj_version": "9.4",
+    "geos_version": "3.12.1",
+    "qgis_version_full": "3.34.6-Prizren",
+    "qt_version": "5.15.8",
+    "pyqt_version": "5.15.9"
+  },
+  "runs": [
+    {
+      "path": "script",
+      "repeat": 1,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 1,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 1,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 2,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 2,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 2,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 3,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 3,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "script",
+      "repeat": 3,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "run_wrapper"
+      ],
+      "first_channel_counts": {
+        "run_wrapper": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 1,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 1,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "history_signal",
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 3,
+        "history_signal": 1
+      },
+      "corroborations": 3,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 1,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 2,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 2,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 4
+      },
+      "corroborations": 2,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 2,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 3,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 4
+      },
+      "corroborations": 4,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 3,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "toolbox",
+      "repeat": 3,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 1,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 1,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 1,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 2,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 2,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 2,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 3,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 3,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 4,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 4
+      },
+      "corroborations": 0,
+      "with_duration": 4,
+      "error": ""
+    },
+    {
+      "path": "batch",
+      "repeat": 3,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 3,
+      "recorded_model_jobs": 0,
+      "channels": [
+        "batch"
+      ],
+      "first_channel_counts": {
+        "batch": 3
+      },
+      "corroborations": 0,
+      "with_duration": 3,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 1,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 1,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 1,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 2,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 2,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "history_signal"
+      ],
+      "first_channel_counts": {
+        "history_signal": 1
+      },
+      "corroborations": 1,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 2,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 3,
+      "workflow": "demo_vector",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 3,
+      "workflow": "coastal_raster",
+      "steps": 4,
+      "outputs_written": 4,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 0,
+      "with_duration": 0,
+      "error": ""
+    },
+    {
+      "path": "modeler",
+      "repeat": 3,
+      "workflow": "hydro_raster",
+      "steps": 3,
+      "outputs_written": 3,
+      "recorded_steps": 0,
+      "recorded_model_jobs": 1,
+      "channels": [
+        "toolbox"
+      ],
+      "first_channel_counts": {
+        "toolbox": 1
+      },
+      "corroborations": 1,
+      "with_duration": 0,
+      "error": ""
+    }
+  ],
+  "agent_capabilities": [
+    "{\"post_execution_hook\": \"inactive\"}"
+  ],
+  "files_recorded": 129
+}

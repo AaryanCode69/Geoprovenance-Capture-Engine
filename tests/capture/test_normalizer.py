@@ -485,3 +485,23 @@ def test_the_provider_is_inferred_from_the_algorithm_id(agent_block):
         ended_at=None, agent=agent_block,
     )
     assert event["provider"] == "gdal"
+
+
+def test_dedup_parameters_unwrap_an_output_definition_to_its_sink_path():
+    """E7, QGIS 4.2.3: the Toolbox hands OUTPUT as a definition object, the
+    history entry as its path — both must key the same job identically."""
+    from fakes import FakeOutputDefinition
+
+    event = {"algorithm_id": "native:buffer"}
+    toolbox = n.dedup_parameters(event, {"INPUT": "/in.shp", "OUTPUT": FakeOutputDefinition("/out/buf.gpkg")})
+    history = n.dedup_parameters(event, {"INPUT": "/in.shp", "OUTPUT": "/out/buf.gpkg"})
+    assert toolbox == history
+
+
+def test_an_empty_list_and_null_key_the_same_run():
+    """E7, QGIS 3.34.6: Toolbox FIELD=[] and the history entry's FIELD=null."""
+    event = {"algorithm_id": "native:dissolve"}
+    toolbox = n.dedup_parameters(event, {"INPUT": "/in.gpkg", "FIELD": []})
+    history = n.dedup_parameters(event, {"INPUT": "/in.gpkg", "FIELD": None})
+    assert toolbox == history
+    assert n.dedup_parameters(event, {"FIELD": ["a"]}) != history

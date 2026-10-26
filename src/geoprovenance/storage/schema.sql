@@ -15,7 +15,7 @@
 --   RULES.md §4.1 — nothing that reads this file may import QGIS.
 -- ============================================================================
 
-PRAGMA user_version = 2;   -- Appendix B.6. Bumped only via storage/migrations.py.
+PRAGMA user_version = 3;   -- Appendix B.6. Bumped only via storage/migrations.py.
 
 
 -- ---------------------------------------------------------------------------
@@ -59,9 +59,14 @@ CREATE TABLE IF NOT EXISTS activities (
     execution_log   TEXT,
 
     -- [+A0.1] RQ1 instrumentation, per RULES.md §5.9 / §8.3.
-    capture_channel TEXT,                    -- 'post_hook'|'run_wrapper'|'history_signal'|'toolbox' — which won
+    capture_channel TEXT,                    -- 'post_hook'|'run_wrapper'|'history_signal'|'toolbox'|'batch' — which won
     corroborations  INTEGER NOT NULL DEFAULT 0,  -- times the OTHER channel also saw this
     dedup_key       TEXT,                    -- (algorithm_id, params hash, started_at@100ms)
+
+    -- [+v3, 24 Oct 2026] {param name: type} as the algorithm declared them at
+    -- capture time, so an audit can say which parameters a later version of
+    -- the algorithm no longer accepts (C9).
+    parameter_definitions_json TEXT,
 
     CHECK (status IN ('completed', 'failed', 'cancelled'))
 );
@@ -84,6 +89,14 @@ CREATE TABLE IF NOT EXISTS agents (
     python_version       TEXT,
     plugin_versions_json TEXT,               -- {"SCP": "8.1.0", ...}
     created_at           TEXT NOT NULL,
+
+    -- [+v3, 24 Oct 2026] The libraries a result can silently depend on
+    -- (CLAIMS_TO_IMPLEMENT.md C2), and what this environment's QGIS turned out
+    -- to support at runtime, e.g. {"post_execution_hook": "inactive"} (C6).
+    gdal_version         TEXT,
+    proj_version         TEXT,
+    geos_version         TEXT,
+    capabilities_json    TEXT,
 
     -- [+A0.1] RULES.md §4.6 — one row per DISTINCT environment, reused across
     -- activities via get_or_create_agent(). Without this, we write one agent
@@ -209,3 +222,21 @@ CREATE INDEX IF NOT EXISTS idx_wf_activities_wf     ON workflow_activities (work
 -- [+A0.1] Session grouping (Appendix B.5) and audit lookups scan these.
 CREATE INDEX IF NOT EXISTS idx_activities_session   ON activities (session_id);
 CREATE INDEX IF NOT EXISTS idx_activities_started   ON activities (started_at);
+
+
+-- ---------------------------------------------------------------------------
+-- [+v3, 24 Oct 2026] Registry snapshots — which Processing algorithms an
+-- environment offered, and their parameter names (C9). Written when the plugin
+-- loads, so an audit run later, on a machine without QGIS, can still say
+-- whether each recorded algorithm is available in the last installation that
+-- opened this database. zlib-compressed JSON: a full registry is hundreds of
+-- algorithms.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS registry_snapshots (
+    id              TEXT PRIMARY KEY,
+    agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    captured_at     TEXT NOT NULL,
+    algorithm_count INTEGER NOT NULL,
+    algorithms_z    BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_registry_snapshots_captured ON registry_snapshots (captured_at);

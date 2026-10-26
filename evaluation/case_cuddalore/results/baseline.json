@@ -1,0 +1,61 @@
+{
+  "versions": {
+    "qgis_version": "4.2.3",
+    "os_info": "Linux-7.2.11-1-cachyos-x86_64-with-glibc2.44",
+    "python_version": "3.14.9",
+    "gdal_version": "3.13.3",
+    "proj_version": "9.9",
+    "geos_version": "3.14.1",
+    "qgis_version_full": "4.2.3-Bel\u00e9m do Par\u00e1"
+  },
+  "record": {
+    "jobs": 49,
+    "jobs_completed": 49,
+    "files": 53,
+    "relations": {
+      "used": 55,
+      "wasAssociatedWith": 49,
+      "wasAttributedTo": 49,
+      "wasDerivedFrom": 55,
+      "wasGeneratedBy": 49
+    },
+    "channels": {
+      "run_wrapper": 49
+    },
+    "corroborations": 0,
+    "fingerprints": 480,
+    "agents": [
+      {
+        "qgis": "4.2.3",
+        "gdal": "3.13.3",
+        "proj": "9.9",
+        "geos": "3.14.1",
+        "python": "3.14.9",
+        "capabilities": "{\"post_execution_hook\": \"inactive\"}"
+      }
+    ],
+    "registry_snapshot_algorithms": [
+      772
+    ],
+    "db_bytes": 458752
+  },
+  "paths": {
+    "shoreline_2015": "run/baseline/2015_shoreline.gpkg",
+    "shoreline_2026": "run/baseline/2026_shoreline.gpkg",
+    "transects": "run/baseline/transects.gpkg",
+    "epr": "run/baseline/epr_classified.gpkg"
+  },
+  "transects": 287,
+  "transects_with_rate": 287,
+  "years": 11.104950820345387,
+  "epr_mean": -0.6469128919860627,
+  "epr_min": -7.1391,
+  "epr_max": 5.9235,
+  "classes": {
+    "accretion": 17,
+    "stable": 78,
+    "erosion": 80,
+    "strong erosion": 76,
+    "strong accretion": 36
+  }
+}

@@ -56,7 +56,7 @@ def test_applies_full_schema(store):
 
 def test_sets_schema_version(store):
     """Appendix B.6 — a versioned database, from day one."""
-    assert store.schema_version() == migrations.CURRENT_VERSION == 2
+    assert store.schema_version() == migrations.CURRENT_VERSION == 3
 
 
 def test_creates_required_indices(store):
@@ -96,7 +96,7 @@ def test_reopening_preserves_data(db_path):
 
     second = ProvenanceStore(db_path)
     assert second.get_entity(entity_id)["label"] == "roads.shp"
-    assert second.schema_version() == 2
+    assert second.schema_version() == migrations.CURRENT_VERSION
     second.close()
 
 
@@ -794,3 +794,64 @@ def test_the_fingerprint_set_of_an_unmeasured_file_is_empty_not_an_error(store):
     """A memory layer has no bytes to hash, and that is a finding, not a fault."""
     entity = store.add_entity(file_path=None, layer_type="vector")
     assert store.get_fingerprint_set(entity) == {}
+
+
+# ===========================================================================
+# schema v3 (24 Oct 2026): library versions, capabilities, registry snapshots
+# ===========================================================================
+
+def test_a_registry_snapshot_round_trips_compressed(store):
+    agent = store.get_or_create_agent(qgis_version="4.2.3", gdal_version="3.13.3")
+    algorithms = {
+        f"native:alg{i}": {"provider": "native", "parameters": ["INPUT", "OUTPUT"]}
+        for i in range(300)
+    }
+    store.add_registry_snapshot(agent_id=agent, algorithms=algorithms)
+    snapshot = store.latest_registry_snapshot()
+    assert snapshot["algorithms"] == algorithms
+    assert snapshot["algorithm_count"] == 300
+    assert snapshot["agent"]["gdal_version"] == "3.13.3"
+    blob = store._connection().execute(
+        "SELECT length(algorithms_z) FROM registry_snapshots"
+    ).fetchone()[0]
+    assert blob < len(str(algorithms)) / 5
+
+
+def test_the_latest_snapshot_wins(store):
+    old = store.get_or_create_agent(qgis_version="3.34.6")
+    new = store.get_or_create_agent(qgis_version="4.2.3")
+    store.add_registry_snapshot(agent_id=old, algorithms={"a": {}}, captured_at="2026-10-01T00:00:00+00:00")
+    store.add_registry_snapshot(agent_id=new, algorithms={"b": {}}, captured_at="2026-10-02T00:00:00+00:00")
+    assert store.latest_registry_snapshot()["agent_id"] == new
+
+
+def test_no_snapshot_is_none(store):
+    assert store.latest_registry_snapshot() is None
+
+
+def test_a_capability_is_merged_not_overwritten(store):
+    agent = store.get_or_create_agent(qgis_version="4.2.3")
+    store.set_agent_capability(agent, "post_execution_hook", "inactive")
+    store.set_agent_capability(agent, "other", 1)
+    assert json.loads(store.get_agent(agent)["capabilities_json"]) == {
+        "post_execution_hook": "inactive", "other": 1,
+    }
+
+
+def test_library_versions_split_environments_only_when_known(store):
+    """An unknown library version must not create a second row for one machine,
+    but a known, different GDAL is a different environment (§4.6)."""
+    a = store.get_or_create_agent(qgis_version="4.2.3", os_info="L", python_version="3.14")
+    b = store.get_or_create_agent(qgis_version="4.2.3", os_info="L", python_version="3.14")
+    c = store.get_or_create_agent(qgis_version="4.2.3", os_info="L", python_version="3.14",
+                                  gdal_version="3.13.3")
+    d = store.get_or_create_agent(qgis_version="4.2.3", os_info="L", python_version="3.14",
+                                  gdal_version="3.8.5")
+    assert a == b
+    assert len({a, c, d}) == 3
+
+
+def test_relation_exists(store):
+    store.add_relation(relation_type="wasAttributedTo", source_id="e", target_id="a")
+    assert store.relation_exists(relation_type="wasAttributedTo", source_id="e", target_id="a")
+    assert not store.relation_exists(relation_type="wasAttributedTo", source_id="a", target_id="e")

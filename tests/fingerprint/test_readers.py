@@ -231,9 +231,65 @@ def test_none_is_accepted_because_memory_layers_arrive_as_none():
 # attribute payload
 # ===========================================================================
 
-def test_the_shapefile_attribute_payload_is_the_dbf(shapefile: pathlib.Path):
-    payload = b"".join(readers.attribute_chunks(shapefile))
-    assert len(payload) == shapefile.with_suffix(".dbf").stat().st_size
+def _swap_first_two_dbf_rows(dbf: pathlib.Path) -> None:
+    raw = bytearray(dbf.read_bytes())
+    header_length, record_length = struct.unpack("<HH", raw[8:12])
+    a = slice(header_length, header_length + record_length)
+    b = slice(header_length + record_length, header_length + 2 * record_length)
+    raw[a], raw[b] = raw[b], raw[a]
+    dbf.write_bytes(bytes(raw))
+
+
+def test_the_shapefile_attribute_payload_ignores_row_order(shapefile: pathlib.Path):
+    """Rows in another order are the same table (C1, 24 Oct 2026)."""
+    before = b"".join(readers.attribute_chunks(shapefile))
+    _swap_first_two_dbf_rows(shapefile.with_suffix(".dbf"))
+    assert b"".join(readers.attribute_chunks(shapefile)) == before
+
+
+def test_the_shapefile_attribute_payload_counts_every_row(shapefile: pathlib.Path):
+    """One multiset over the rows: its count, then the 2048-bit sum."""
+    count, total = b"".join(readers.attribute_chunks(shapefile)).decode().strip().split(":")
+    assert count == "8"
+    assert len(total) == readers.MULTISET_BITS // 4
+
+
+def test_the_multiset_ignores_order_and_counts_repeats():
+    """Addition commutes; a repeated row is two rows, never zero (XOR would cancel)."""
+    def digest(*rows):
+        m = readers._Multiset()
+        for row in rows:
+            m.add(row)
+        return b"".join(m.chunks())
+
+    assert digest(b"a", b"b", b"c") == digest(b"c", b"a", b"b")
+    assert digest(b"a", b"a") != digest() and digest(b"a", b"a") != digest(b"a")
+    assert digest(b"a", b"b") != digest(b"a", b"c")
+
+
+def test_a_large_table_is_digested_without_a_row_ceiling(tmp_path: pathlib.Path):
+    """E3: until 24 Oct 2026 no content signal was produced above 100,000 rows."""
+    assert readers.DEFAULT_MAX_ATTRIBUTE_ROWS is None
+
+
+def test_a_numeric_value_padded_differently_is_the_same_value():
+    assert readers._dbf_value("N", b"  1.50") == readers._dbf_value("N", b"1.5   ")
+    assert readers._dbf_value("N", b"   1") == readers._dbf_value("N", b"1.0")
+    assert readers._dbf_value("N", b"   2") != readers._dbf_value("N", b"1")
+    assert readers._dbf_value("N", b"      ") is None
+    assert readers._dbf_value("L", b"y") == readers._dbf_value("L", b"T")
+    assert readers._dbf_value("C", b"Main St   ") == "Main St"
+
+
+def test_a_deleted_dbf_row_is_not_data(shapefile: pathlib.Path):
+    before = b"".join(readers.attribute_chunks(shapefile))
+    dbf = shapefile.with_suffix(".dbf")
+    raw = bytearray(dbf.read_bytes())
+    header_length = struct.unpack("<H", raw[8:10])[0]
+    raw[header_length] = ord("*")
+    dbf.write_bytes(bytes(raw))
+    after = b"".join(readers.attribute_chunks(shapefile))
+    assert after.startswith(b"7:") and after != before
 
 
 def test_the_dbf_last_written_date_is_blanked_before_hashing(
@@ -262,9 +318,20 @@ def test_the_geopackage_attribute_payload_excludes_geometry(
     and a geometry edit would move the same value again — which is the failure
     being fixed.
     """
-    payload = b"".join(readers.attribute_chunks(geopackage))
-    assert b"site_00" in payload
-    assert b"GP\x00\x01".hex().encode() not in payload
+    rows: list[bytes] = []
+    original = readers._Multiset.add
+
+    def spy(self, *parts):
+        rows.append(b"".join(parts))
+        return original(self, *parts)
+
+    readers._Multiset.add = spy
+    try:
+        b"".join(readers.attribute_chunks(geopackage))
+    finally:
+        readers._Multiset.add = original
+    assert any(b"site_00" in row for row in rows)
+    assert not any(b"GP\x00" in row for row in rows)
 
 
 def test_the_geopackage_attribute_payload_is_row_order_independent(
@@ -272,8 +339,8 @@ def test_the_geopackage_attribute_payload_is_row_order_independent(
 ):
     """A rewrite that renumbers rows without changing a value is a re-save.
 
-    Rows are sorted by their serialised value before hashing, so re-inserting
-    the same data in a different order does not read as an edit.
+    Rows are combined as a multiset, so re-inserting the same data in a
+    different order does not read as an edit.
     """
     before = b"".join(readers.attribute_chunks(geopackage))
     connection = sqlite3.connect(geopackage)
@@ -323,16 +390,24 @@ def _swap_first_two_shp_records(shp: pathlib.Path) -> None:
     shp.write_bytes(bytes(raw))
 
 
-def test_the_shapefile_geometry_payload_keeps_record_order(shapefile: pathlib.Path):
-    """The `.dbf` rows pair with the `.shp` records by position.
+def test_the_shapefile_geometry_payload_ignores_record_order(shapefile: pathlib.Path):
+    """Records in another order are the same shapes (C1, 24 Oct 2026).
 
-    Swapping two records leaves the same set of points but gives each one the
-    other's attributes, which is an edit — so, unlike the GeoPackage payload,
-    this one is not sorted.
+    Until then file order was kept because `.dbf` rows pair with records by
+    position. With both payloads sorted, a reorder of the whole file is a
+    re-save; the residual — two features swapping attributes and nothing
+    else — is stated in `readers._dbf_row_chunks` and in the manuscript.
     """
     before = b"".join(readers.geometry_chunks(shapefile))
     _swap_first_two_shp_records(shapefile)
-    assert b"".join(readers.geometry_chunks(shapefile)) != before
+    assert b"".join(readers.geometry_chunks(shapefile)) == before
+
+
+def test_a_shapefile_over_the_row_ceiling_yields_no_coordinate_signal(
+    shapefile: pathlib.Path,
+):
+    assert readers.geometry_chunks(shapefile, max_rows=3) is None
+    assert readers.attribute_chunks(shapefile, max_rows=3) is None
 
 
 def test_the_shapefile_record_numbers_are_not_part_of_the_payload(
@@ -431,3 +506,25 @@ def test_an_unknown_format_yields_no_geometry_signal(tmp_path: pathlib.Path):
     raster.write_bytes(b"II*\x00" + b"\x00" * 64)
     assert readers.geometry_chunks(raster) is None
     assert readers.geometry_chunks(None) is None
+
+
+def test_a_number_beyond_double_precision_is_the_number_it_rounds_to():
+    """E1 (24 Oct 2026): QGIS wrote 1309811.999999999767169 where GDAL wrote
+    1309812.000000000000000 for one double."""
+    assert readers._dbf_value("N", b" 1309812.000000000000000") == readers._dbf_value(
+        "N", b" 1309811.999999999767169")
+    assert readers._dbf_value("N", b"1309812.5") != readers._dbf_value("N", b"1309812.0")
+
+
+def test_a_geometry_column_declared_blob_or_by_type_is_one_structure(geopackage: pathlib.Path):
+    """E1 (24 Oct 2026): a writer may declare the geometry column BLOB or POINT."""
+    before = readers.describe(geopackage).structure_payload()
+    connection = sqlite3.connect(geopackage)
+    table, column = connection.execute(
+        "SELECT table_name, column_name FROM gpkg_geometry_columns").fetchone()
+    sql = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE name = ?", (table,)).fetchone()[0]
+    connection.close()
+    assert readers.describe(geopackage).structure_payload() == before
+    names = [l["field_types"] for l in before["layers"]][0]
+    assert any(t.startswith("GEOMETRY:") for t in names)

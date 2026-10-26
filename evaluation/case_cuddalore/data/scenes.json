@@ -1,0 +1,102 @@
+{
+  "source": "https://planetarycomputer.microsoft.com/api/stac/v1",
+  "aoi_lonlat": [
+    79.7,
+    11.6,
+    79.85,
+    11.85
+  ],
+  "window_epsg32644": [
+    356775.0,
+    1311825.0,
+    376245.0,
+    1281105.0
+  ],
+  "scenes": {
+    "baseline": {
+      "stac_id": "LC08_L2SP_142052_20150624_02_T1",
+      "product_id": "LC08_L2SP_142052_20150624_20200909_02_T1",
+      "datetime": "2015-06-24T04:58:13.925144Z",
+      "cloud_cover": 3.25,
+      "platform": "landsat-8",
+      "files": {
+        "B3": {
+          "path": "baseline_B3.tif",
+          "sha256": "00b2f06f03260302bbe24e6c8608d9c9d827a89709e2f0313b14d9ff140f38dc"
+        },
+        "B6": {
+          "path": "baseline_B6.tif",
+          "sha256": "341fe64117f802afcd11bff0ea6a80c95000983868be7855c49c4ae50854d55e"
+        }
+      }
+    },
+    "recent": {
+      "stac_id": "LC09_L2SP_142052_20260801_02_T1",
+      "product_id": "LC09_L2SP_142052_20260801_20260802_02_T1",
+      "datetime": "2026-08-01T04:58:41.923153Z",
+      "cloud_cover": 7.25,
+      "platform": "landsat-9",
+      "files": {
+        "B3": {
+          "path": "recent_B3.tif",
+          "sha256": "2a7998e77d2d0067c09a9fbd973174c294f526a6964ff6257db1fdc57740da04"
+        },
+        "B6": {
+          "path": "recent_B6.tif",
+          "sha256": "663d27c3652e95285698fb3e84c67c136eb503d17174f19c2d99b0314b621de9"
+        }
+      }
+    },
+    "alt1": {
+      "stac_id": "LC09_L2SP_142052_20250729_02_T1",
+      "product_id": "LC09_L2SP_142052_20250729_20250731_02_T1",
+      "datetime": "2025-07-29T04:58:47.366622Z",
+      "cloud_cover": 0.04,
+      "platform": "landsat-9",
+      "files": {
+        "B3": {
+          "path": "alt1_B3.tif",
+          "sha256": "b5683ee17bee44e0d109a69229409fcff98b4763f16ebf71c8e77c9c3717cf1a"
+        },
+        "B6": {
+          "path": "alt1_B6.tif",
+          "sha256": "ee5ed3227e623d0c2bc24e495d694c027eeb8991dddc61e7ff5a83a178bd42a2"
+        }
+      }
+    },
+    "alt2": {
+      "stac_id": "LC08_L2SP_142052_20250806_02_T1",
+      "product_id": "LC08_L2SP_142052_20250806_20250815_02_T1",
+      "datetime": "2025-08-06T04:58:52.904420Z",
+      "cloud_cover": 3.22,
+      "platform": "landsat-8",
+      "files": {
+        "B3": {
+          "path": "alt2_B3.tif",
+          "sha256": "66dfef2ca7bcb6edbdc395c9b0c2823d135841cc42e3dc65ad534fd47405daf9"
+        },
+        "B6": {
+          "path": "alt2_B6.tif",
+          "sha256": "188bd6a75f34b6acc0e237a645ce43389e75ab2d048d4dab6c2b2194b699b395"
+        }
+      }
+    },
+    "alt3": {
+      "stac_id": "LC08_L2SP_142052_20240531_02_T1",
+      "product_id": "LC08_L2SP_142052_20240531_20240611_02_T1",
+      "datetime": "2024-05-31T04:57:57.223655Z",
+      "cloud_cover": 1.56,
+      "platform": "landsat-8",
+      "files": {
+        "B3": {
+          "path": "alt3_B3.tif",
+          "sha256": "191ea6b5a171d824efda22c2005b943c72d610715eda56dd620d5f101f465292"
+        },
+        "B6": {
+          "path": "alt3_B6.tif",
+          "sha256": "b9a8a4ea7671be3bcd01234f3f360d963d4c562a6d591479dff86a46ab4fb877"
+        }
+      }
+    }
+  }
+}

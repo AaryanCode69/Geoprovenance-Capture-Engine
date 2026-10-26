@@ -1,0 +1,239 @@
+{
+  "python": "3.14.9",
+  "repeats": 3,
+  "interpreter_baseline_rss_kb_median": 24416,
+  "results": [
+    {
+      "format": "Shapefile",
+      "nominal_mb": 1,
+      "bytes": 1045449,
+      "primary_file_bytes": 418000,
+      "seconds_median": 0.08245578099740669,
+      "seconds_runs": [
+        0.08509527600108413,
+        0.07960942600038834,
+        0.08245578099740669
+      ],
+      "peak_rss_kb_median": 24840,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "Shapefile",
+      "nominal_mb": 10,
+      "bytes": 10448409,
+      "primary_file_bytes": 4179184,
+      "seconds_median": 0.832734896997863,
+      "seconds_runs": [
+        0.8126569360028952,
+        0.8360550309953396,
+        0.832734896997863
+      ],
+      "peak_rss_kb_median": 26404,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "Shapefile",
+      "nominal_mb": 100,
+      "bytes": 104478289,
+      "primary_file_bytes": 41791136,
+      "seconds_median": 8.432958349003457,
+      "seconds_runs": [
+        8.489172716996109,
+        8.35794061699562,
+        8.432958349003457
+      ],
+      "peak_rss_kb_median": 26604,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "Shapefile",
+      "nominal_mb": 1000,
+      "bytes": 1044776809,
+      "primary_file_bytes": 417910544,
+      "seconds_median": 83.97753818000638,
+      "seconds_runs": [
+        83.97753818000638,
+        81.64545160700072,
+        84.15301261000423
+      ],
+      "peak_rss_kb_median": 26352,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoPackage",
+      "nominal_mb": 1,
+      "bytes": 1183744,
+      "primary_file_bytes": 1183744,
+      "seconds_median": 0.0590085049989284,
+      "seconds_runs": [
+        0.06253104899951722,
+        0.05490219499915838,
+        0.0590085049989284
+      ],
+      "peak_rss_kb_median": 26544,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoPackage",
+      "nominal_mb": 10,
+      "bytes": 11309056,
+      "primary_file_bytes": 11309056,
+      "seconds_median": 0.5498082310004975,
+      "seconds_runs": [
+        0.5541568539993023,
+        0.5498082310004975,
+        0.5485068679990945
+      ],
+      "peak_rss_kb_median": 27568,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoPackage",
+      "nominal_mb": 100,
+      "bytes": 112758784,
+      "primary_file_bytes": 112758784,
+      "seconds_median": 5.664566746003402,
+      "seconds_runs": [
+        5.541403007999179,
+        5.667506325997238,
+        5.664566746003402
+      ],
+      "peak_rss_kb_median": 27292,
+      "strategies": [
+        "attributes",
+        "file",
+        "geometry",
+        "geometry_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoPackage",
+      "nominal_mb": 1000,
+      "bytes": 1158893568,
+      "primary_file_bytes": 1158893568,
+      "seconds_median": 54.883592609003244,
+      "seconds_runs": [
+        54.724724306004646,
+        54.883592609003244,
+        56.14340431299934
+      ],
+      "peak_rss_kb_median": 27392,
+      "strategies": [
+        "attributes",
+        "geometry",
+        "geometry_content",
+        "schema_sample",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoTIFF",
+      "nominal_mb": 1,
+      "bytes": 874165,
+      "primary_file_bytes": 874165,
+      "seconds_median": 0.005746321003243793,
+      "seconds_runs": [
+        0.013305315005709417,
+        0.005746321003243793,
+        0.005620681004074868
+      ],
+      "peak_rss_kb_median": 25864,
+      "strategies": [
+        "file",
+        "pixel_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoTIFF",
+      "nominal_mb": 10,
+      "bytes": 8754077,
+      "primary_file_bytes": 8754077,
+      "seconds_median": 0.0546526729958714,
+      "seconds_runs": [
+        0.06338780400255928,
+        0.0546526729958714,
+        0.05444885400356725
+      ],
+      "peak_rss_kb_median": 28560,
+      "strategies": [
+        "file",
+        "pixel_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoTIFF",
+      "nominal_mb": 100,
+      "bytes": 87505572,
+      "primary_file_bytes": 87505572,
+      "seconds_median": 0.49979518699547043,
+      "seconds_runs": [
+        0.5269038469996303,
+        0.49979518699547043,
+        0.4962117320028483
+      ],
+      "peak_rss_kb_median": 37228,
+      "strategies": [
+        "file",
+        "pixel_content",
+        "structure"
+      ]
+    },
+    {
+      "format": "GeoTIFF",
+      "nominal_mb": 1000,
+      "bytes": 874908739,
+      "primary_file_bytes": 874908739,
+      "seconds_median": 4.667251746999682,
+      "seconds_runs": [
+        4.809411549998913,
+        4.667251746999682,
+        4.5769164789962815
+      ],
+      "peak_rss_kb_median": 64272,
+      "strategies": [
+        "pixel_content",
+        "schema_sample",
+        "structure"
+      ]
+    }
+  ]
+}

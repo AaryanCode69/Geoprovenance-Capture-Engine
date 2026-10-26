@@ -61,6 +61,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import zlib
 import pathlib
 import sqlite3
 import threading
@@ -140,6 +141,10 @@ def environment_fingerprint(
     os_info: str | None,
     python_version: str | None,
     plugin_versions: Any = None,
+    *,
+    gdal_version: str | None = None,
+    proj_version: str | None = None,
+    geos_version: str | None = None,
 ) -> str:
     """Stable digest of one environment, for agent de-duplication (§4.6).
 
@@ -148,16 +153,23 @@ def environment_fingerprint(
     reused across every activity run in the same environment. Writing one agent
     row per execution would inflate our own RQ2 storage numbers (§8.6).
     """
-    payload = json.dumps(
-        {
-            "qgis_version": qgis_version,
-            "os_info": os_info,
-            "python_version": python_version,
-            "plugin_versions": plugin_versions,
-        },
-        sort_keys=True,
-        default=str,
-    )
+    body = {
+        "qgis_version": qgis_version,
+        "os_info": os_info,
+        "python_version": python_version,
+        "plugin_versions": plugin_versions,
+    }
+    # v3 library versions join the key only when known, so an environment
+    # described without them (every v2 row, and every probe outside QGIS)
+    # keeps the digest it always had and is not split into a second row.
+    for name, value in (
+        ("gdal_version", gdal_version),
+        ("proj_version", proj_version),
+        ("geos_version", geos_version),
+    ):
+        if value is not None:
+            body[name] = value
+    payload = json.dumps(body, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -455,6 +467,7 @@ class ProvenanceStore:
         capture_channel: str | None = None,
         dedup_key: str | None = None,
         activity_id: str | None = None,
+        parameter_definitions: Any = None,
     ) -> str:
         """Insert a job-run row and return its id.
 
@@ -470,8 +483,9 @@ class ProvenanceStore:
         self._write(
             "INSERT INTO activities (id, algorithm_id, algorithm_name, provider, "
             "session_id, started_at, ended_at, parameters_json, status, "
-            "execution_log, capture_channel, corroborations, dedup_key) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?)",
+            "execution_log, capture_channel, corroborations, dedup_key, "
+            "parameter_definitions_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
             (
                 activity_id,
                 algorithm_id,
@@ -485,6 +499,7 @@ class ProvenanceStore:
                 execution_log,
                 capture_channel,
                 dedup_key,
+                _json_or_none(parameter_definitions),
             ),
         )
         return activity_id
@@ -526,6 +541,13 @@ class ProvenanceStore:
                 "ORDER BY started_at",
                 (lower, upper),
             )
+        )
+
+    def update_activity_interval(self, activity_id: str, started_at: str, ended_at: str) -> None:
+        """Replace a job's recorded interval (a better-measured one arrived)."""
+        self._write(
+            "UPDATE activities SET started_at = ?, ended_at = ? WHERE id = ?",
+            (started_at, ended_at, activity_id),
         )
 
     def increment_corroboration(self, activity_id: str) -> int:
@@ -572,12 +594,16 @@ class ProvenanceStore:
         agent_id: str | None = None,
         env_fingerprint: str | None = None,
         created_at: str | None = None,
+        gdal_version: str | None = None,
+        proj_version: str | None = None,
+        geos_version: str | None = None,
     ) -> str:
         agent_id = agent_id or new_id()
         self._write(
             "INSERT INTO agents (id, agent_type, label, qgis_version, os_info, "
-            "python_version, plugin_versions_json, created_at, env_fingerprint) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "python_version, plugin_versions_json, created_at, env_fingerprint, "
+            "gdal_version, proj_version, geos_version) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 agent_id,
                 agent_type,
@@ -588,6 +614,9 @@ class ProvenanceStore:
                 _json_or_none(plugin_versions),
                 created_at or utc_now_iso(),
                 env_fingerprint,
+                gdal_version,
+                proj_version,
+                geos_version,
             ),
         )
         return agent_id
@@ -609,6 +638,9 @@ class ProvenanceStore:
         label: str | None = None,
         agent_type: str = "software",
         created_at: str | None = None,
+        gdal_version: str | None = None,
+        proj_version: str | None = None,
+        geos_version: str | None = None,
     ) -> str:
         """One agent row per DISTINCT environment, reused across activities (§4.6).
 
@@ -616,7 +648,9 @@ class ProvenanceStore:
         storage-per-operation numbers with a bug of our own making (§8.6).
         """
         fingerprint = environment_fingerprint(
-            qgis_version, os_info, python_version, plugin_versions
+            qgis_version, os_info, python_version, plugin_versions,
+            gdal_version=gdal_version, proj_version=proj_version,
+            geos_version=geos_version,
         )
         existing = self._connection().execute(
             "SELECT id FROM agents WHERE env_fingerprint = ?", (fingerprint,)
@@ -632,7 +666,70 @@ class ProvenanceStore:
             plugin_versions=plugin_versions,
             env_fingerprint=fingerprint,
             created_at=created_at,
+            gdal_version=gdal_version,
+            proj_version=proj_version,
+            geos_version=geos_version,
         )
+
+    def set_agent_capability(self, agent_id: str, name: str, value: Any) -> None:
+        """Record one runtime fact about an environment (v3, C6).
+
+        Read-modify-write under the write lock, inside a transaction, so two
+        probes reporting at once cannot drop each other's key.
+        """
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT capabilities_json FROM agents WHERE id = ?", (agent_id,)
+            ).fetchone()
+            if row is None:
+                raise StoreError(f"no agent {agent_id!r}")
+            current = json.loads(row[0]) if row[0] else {}
+            current[name] = value
+            self._write(
+                "UPDATE agents SET capabilities_json = ? WHERE id = ?",
+                (json.dumps(current, sort_keys=True), agent_id),
+            )
+
+    # -- registry snapshots (v3, C9) -----------------------------------------
+
+    def add_registry_snapshot(
+        self,
+        *,
+        agent_id: str,
+        algorithms: dict[str, Any],
+        captured_at: str | None = None,
+    ) -> str:
+        """Store which algorithms an environment offered, with their parameters.
+
+        ``algorithms`` maps algorithm id -> {"provider": ..., "parameters": [...]}.
+        Compressed, because a full registry is hundreds of algorithms and this
+        is written every time the plugin loads (RQ2 storage, §8.6).
+        """
+        snapshot_id = new_id()
+        blob = zlib.compress(
+            json.dumps(algorithms, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+            9,
+        )
+        self._write(
+            "INSERT INTO registry_snapshots (id, agent_id, captured_at, "
+            "algorithm_count, algorithms_z) VALUES (?,?,?,?,?)",
+            (snapshot_id, agent_id, captured_at or utc_now_iso(), len(algorithms), blob),
+        )
+        return snapshot_id
+
+    def latest_registry_snapshot(self) -> dict[str, Any] | None:
+        """The most recent snapshot, decompressed, with its agent; None if none."""
+        row = self._connection().execute(
+            "SELECT * FROM registry_snapshots ORDER BY captured_at DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        snapshot = dict(row)
+        snapshot["algorithms"] = json.loads(
+            zlib.decompress(snapshot.pop("algorithms_z")).decode("utf-8")
+        )
+        snapshot["agent"] = self.get_agent(snapshot["agent_id"])
+        return snapshot
 
     # -- fingerprints (Person B writes these THROUGH here — §1.3) -----------
 
@@ -846,6 +943,20 @@ class ProvenanceStore:
             ),
         )
         return relation_id
+
+    def relation_exists(
+        self, *, relation_type: str, source_id: str, target_id: str
+    ) -> bool:
+        return (
+            self._connection()
+            .execute(
+                "SELECT 1 FROM relations WHERE relation_type = ? AND source_id = ? "
+                "AND target_id = ? LIMIT 1",
+                (relation_type, source_id, target_id),
+            )
+            .fetchone()
+            is not None
+        )
 
     def get_relations_for(
         self, node_id: str, direction: str = "both"
@@ -1100,17 +1211,20 @@ class ProvenanceStore:
                 )
             )
 
-        # Dataset-to-dataset links (wasDerivedFrom) sit between two entities, so
-        # the activity-anchored query above misses them.
+        # Dataset-to-dataset links (wasDerivedFrom) sit between two entities,
+        # and dataset-to-environment links (wasAttributedTo, v3) between an
+        # entity and an agent, so the activity-anchored query above misses both.
         entity_ids = [e["id"] for e in entities]
         if entity_ids:
+            ends = entity_ids + [g["id"] for g in agents]
             marks_e = _placeholders(entity_ids)
+            marks_t = _placeholders(ends)
             seen = {r["id"] for r in relations}
             extra = _rows_to_dicts(
                 conn.execute(
                     f"SELECT * FROM relations "
-                    f"WHERE source_id IN ({marks_e}) AND target_id IN ({marks_e})",
-                    (*entity_ids, *entity_ids),
+                    f"WHERE source_id IN ({marks_e}) AND target_id IN ({marks_t})",
+                    (*entity_ids, *ends),
                 )
             )
             relations.extend(r for r in extra if r["id"] not in seen)
@@ -1218,6 +1332,7 @@ class ProvenanceStore:
         tables = (
             "entities", "activities", "agents", "fingerprints",
             "relations", "workflows", "workflow_activities", "audit_results",
+            "registry_snapshots",
         )
         return {
             t: int(conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0])

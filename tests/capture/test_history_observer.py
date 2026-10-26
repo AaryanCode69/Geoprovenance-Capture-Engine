@@ -345,3 +345,105 @@ def test_a_failed_run_seen_only_by_this_channel_is_still_recorded(engine, store)
     )
     activities = store.list_activities_for_session(engine.session_id)
     assert activities[0]["status"] == "failed"
+
+
+# ===========================================================================
+# C4 (24 Oct 2026): with the registry's definitions, a history-only job has files
+# ===========================================================================
+
+def _real_engine(tmp_path):
+    from geoprovenance.capture.engine import ProvenanceCaptureEngine
+    from geoprovenance.storage.store import ProvenanceStore
+
+    store = ProvenanceStore(tmp_path / "h.db")
+    return ProvenanceCaptureEngine(store, enrich=False), store
+
+
+def test_a_history_only_job_is_recorded_with_its_files_when_definitions_are_known(tmp_path):
+    engine, store = _real_engine(tmp_path)
+    lookup = {"native:buffer": {"INPUT": "source", "DISTANCE": "distance", "OUTPUT": "sink"}}
+    observer = h.HistoryObserver(engine, definitions_lookup=lookup.get)
+    payload = {
+        "algorithm_id": "native:buffer",
+        "parameters": {"inputs": {"INPUT": "/data/roads.shp", "DISTANCE": 10.0,
+                                  "OUTPUT": "/data/roads_buffered.gpkg"}},
+    }
+    assert observer.handle_entry(7, payload, WHEN)
+    counts = store.counts()
+    assert counts["entities"] == 2
+    types = {r[0] for r in store._connection().execute("SELECT relation_type FROM relations")}
+    assert {"used", "wasGeneratedBy", "wasAttributedTo", "wasAssociatedWith"} <= types
+    store.close()
+
+
+def test_a_temporary_output_is_taken_from_the_entry_results(tmp_path):
+    engine, store = _real_engine(tmp_path)
+    lookup = {"native:buffer": {"INPUT": "source", "OUTPUT": "sink"}}
+    observer = h.HistoryObserver(engine, definitions_lookup=lookup.get)
+    payload = {
+        "algorithm_id": "native:buffer",
+        "parameters": {"inputs": {"INPUT": "/data/roads.shp", "OUTPUT": "TEMPORARY_OUTPUT"}},
+        "results": {"OUTPUT": "/tmp/processing/abc/Buffered.gpkg"},
+    }
+    assert observer.handle_entry(8, payload, WHEN)
+    paths = {r[0] for r in store._connection().execute("SELECT file_path FROM entities")}
+    assert "/tmp/processing/abc/Buffered.gpkg" in paths
+    store.close()
+
+
+def test_without_definitions_the_history_channel_still_records_settings_only(tmp_path):
+    engine, store = _real_engine(tmp_path)
+    observer = h.HistoryObserver(engine, definitions_lookup=lambda _: None)
+    payload = {"algorithm_id": "native:buffer",
+               "parameters": {"INPUT": "/data/roads.shp", "OUTPUT": "/data/out.gpkg"}}
+    assert observer.handle_entry(9, payload, WHEN)
+    assert store.counts()["entities"] == 0
+    store.close()
+
+
+def test_a_failing_lookup_never_costs_the_record(tmp_path):
+    engine, store = _real_engine(tmp_path)
+    def explode(_):
+        raise RuntimeError("registry gone")
+    observer = h.HistoryObserver(engine, definitions_lookup=explode)
+    assert observer.handle_entry(10, {"algorithm_id": "native:buffer", "parameters": {}}, WHEN)
+    assert store.counts()["activities"] == 1
+    store.close()
+
+
+def test_results_are_parsed_when_present():
+    parsed = h.parse_history_entry({"algorithm_id": "a:b", "parameters": {}, "results": {"OUTPUT": "/x"}})
+    assert parsed["results"] == {"OUTPUT": "/x"}
+
+
+def test_an_empty_qgis4_envelope_is_unwrapped_to_no_parameters():
+    """E7, QGIS 4.2.3: a model with no inputs is logged with "inputs": {}."""
+    parsed = h.parse_history_entry({
+        "algorithm_id": "demo_vector_1",
+        "parameters": {"area_units": "m2", "distance_units": "meters",
+                       "ellipsoid": "NONE", "inputs": {}},
+    })
+    assert parsed["parameters"] == {}
+
+
+def test_a_real_parameter_named_inputs_is_not_mistaken_for_the_envelope():
+    parsed = h.parse_history_entry({
+        "algorithm_id": "x:y", "parameters": {"inputs": {}, "DISTANCE": 5}})
+    assert parsed["parameters"] == {"inputs": {}, "DISTANCE": 5}
+
+
+@pytest.mark.parametrize("version, safe", [(33406, False), (33800, False), (40000, True),
+                                           (40203, True), (None, False)])
+def test_the_history_signal_is_only_connected_where_it_was_measured_safe(version, safe):
+    """QGIS 3.34.6 segfaults on any Python slot on entryAdded (E7)."""
+    assert h.signal_is_safe(version) is safe
+
+
+def test_a_qgis334_null_envelope_is_unwrapped_to_no_parameters():
+    """E7, QGIS 3.34.6: the same model run is logged with "inputs": null."""
+    parsed = h.parse_history_entry({
+        "algorithm_id": "demo_vector_1",
+        "parameters": {"area_units": "m2", "distance_units": "meters",
+                       "ellipsoid": "NONE", "inputs": None},
+    })
+    assert parsed["parameters"] == {}

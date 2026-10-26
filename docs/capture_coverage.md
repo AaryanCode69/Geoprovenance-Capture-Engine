@@ -12,7 +12,37 @@
 | **Qt version** | **6.10.3** — PyQt6, not PyQt5 |
 | **OS** | **Linux-6.18.42-1-cachyos-lts-x86_64-with-glibc2.42** |
 | **Measured by** | `make qgis-demo-run` → `qgis_demo/findings.txt` (RULES.md §8.7 — every number here traces back to that) |
-| **Last updated** | 24 Aug 2026 |
+| **Last updated** | 24 Oct 2026 (E7 summary below); the table under it is from 24 Aug 2026 |
+
+> ### 24 Oct 2026 — superseded for both releases by the E7 evaluation
+>
+> The four invocation paths have now been measured on **QGIS 4.2.3 and 3.34.6**,
+> three workflows x three repeats each, with the real plugin loaded
+> (`evaluation/completeness/run_paths.py`; raw results in
+> `evaluation/completeness/results/qgis_<version>.json`; manuscript Table 9).
+> Toolbox, batch and Modeler were driven programmatically through the dialogs
+> QGIS opens for them, on an offscreen display, not clicked by hand.
+>
+> | Path | 4.2.3 | 3.34.6 | Channel that sees it first |
+> |---|---|---|---|
+> | `processing.run()` script | all jobs | all jobs | `run_wrapper` only |
+> | Toolbox dialog | all jobs | all jobs | `history_signal` on 4.2.3 (entry written as the run starts), corroborated by `toolbox`; `toolbox` on 3.34.6 (history is polled there) |
+> | Batch dialog | all jobs | all jobs | **`batch` only** — the fifth channel, added because batch rows reached no other channel and write no history entry |
+> | Modeler ("Run" of a model) | all model **steps** | the model job only | `toolbox`; steps come from `QgsProcessingContext.modelResult()`, which 3.34 does not have |
+>
+> The post-execution hook fired on **neither** release: 3.34.6, like 4.2.x, has
+> the setting (`ProcessingConfig.POST_EXECUTION_SCRIPT`) and no code that runs it.
+> The runtime probe records `inactive` on both.
+>
+> Defects found by running it, each fixed with a test: Toolbox jobs written
+> twice on 4.2.3 (output definitions vs paths; project layer ids vs paths),
+> `FIELD: []` vs `null` between the Toolbox and the 3.34 history entry, an empty
+> model envelope (`"inputs": {}` on 4.2.3, `null` on 3.34.6) recorded as
+> parameters, and **a crash**: any Python slot on `entryAdded` segfaults QGIS
+> 3.34.6 when the Toolbox writes its history entry, so below QGIS 4 the history
+> channel polls instead (`history_observer.signal_is_safe`).
+>
+> The 24 Aug notes below are kept as the record of what was known then.
 
 > ### Read this before quoting any number below
 >

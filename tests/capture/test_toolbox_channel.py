@@ -444,3 +444,88 @@ def test_a_genuinely_separate_toolbox_run_is_not_swallowed(engine, store, toolbo
     assert later.recorded, "a separate run must not be folded into the first"
     assert store.counts()["activities"] == 2
     assert store.get_activity(row["id"])["corroborations"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Project layer ids (E7, QGIS 4.2.3)
+# ---------------------------------------------------------------------------
+
+def test_layer_id_resolution_leaves_parameters_alone_without_qgis():
+    """Outside QGIS there is no project to look in; nothing is changed."""
+    params = {"INPUT": "roads_buffered_589c11af", "DISTANCE": 10}
+    assert hooks.resolve_project_layers(params) == params
+
+
+@pytest.mark.qgis
+def test_a_project_layer_id_is_recorded_as_the_layer_source(tmp_path):
+    """Once a job's output is in the project, the Toolbox names it by layer id."""
+    from qgis.core import QgsProject, QgsVectorLayer
+
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", "roads_buffered", "memory")
+    QgsProject.instance().addMapLayer(layer)
+    try:
+        resolved = hooks.resolve_project_layers(
+            {"INPUT": layer.id(), "LAYERS": [layer.id(), "/data/x.shp"], "DISTANCE": 10})
+        assert resolved == {"INPUT": layer.source(), "LAYERS": [layer.source(), "/data/x.shp"],
+                            "DISTANCE": 10}
+    finally:
+        QgsProject.instance().removeMapLayer(layer.id())
+
+
+# ---------------------------------------------------------------------------
+# Processing model steps (E7, QGIS 4.2.3)
+# ---------------------------------------------------------------------------
+
+class FakeChildResult:
+    def __init__(self, inputs, outputs, status="Qgis.ProcessingModelChildAlgorithmExecutionStatus.Success"):
+        self._inputs, self._outputs, self._status = inputs, outputs, status
+
+    def inputs(self):
+        return self._inputs
+
+    def outputs(self):
+        return self._outputs
+
+    def executionStatus(self):  # noqa: N802 — QGIS name
+        return self._status
+
+
+class FakeModel(FakeAlgorithm):
+    """A QgsProcessingModelAlgorithm with two chained steps."""
+
+    def __init__(self):
+        super().__init__("demo_model", definitions={})
+        self._children = {"clip": FakeAlgorithm("native:clip"), "buffer": FakeAlgorithm("native:buffer")}
+
+    def childAlgorithm(self, child_id):  # noqa: N802 — QGIS name
+        algorithm = self._children[child_id]
+        return types.SimpleNamespace(algorithm=lambda: algorithm, algorithmId=lambda: algorithm.id())
+
+    def dependsOnChildAlgorithms(self, child_id):  # noqa: N802 — QGIS name
+        return {"buffer"} if child_id == "clip" else set()
+
+
+def test_each_step_of_a_model_is_recorded_as_its_own_job_in_dependency_order(engine, store, toolbox):
+    """Before: one job named after the model, no files. After: its steps too."""
+    hooks.install_toolbox_wrapper(engine)
+    results = {
+        # Keyed alphabetically, as a QVariantMap is — "buffer" runs first anyway.
+        "clip": FakeChildResult({"INPUT": "/out/buffered.shp", "OVERLAY": "/data/city.shp",
+                                 "OUTPUT": "/out/clipped.shp"}, {"OUTPUT": "/out/clipped.shp"}),
+        "buffer": FakeChildResult({"INPUT": "/data/roads.shp", "DISTANCE": 10, "SEGMENTS": 5,
+                                   "DISSOLVE": False, "OUTPUT": "/out/buffered.shp"},
+                                  {"OUTPUT": "/out/buffered.shp"}),
+    }
+    context = types.SimpleNamespace(
+        modelResult=lambda: types.SimpleNamespace(childResults=lambda: results))
+    toolbox.execute(FakeModel(), {}, context)
+
+    recorded = [a["algorithm_id"] for a in activities(store)]
+    assert recorded == ["demo_model", "native:buffer", "native:clip"]
+
+
+def test_a_context_without_model_results_records_only_the_model(engine, store, toolbox):
+    """QGIS 3.34 has no modelResult(): the model job alone, and no error."""
+    hooks.install_toolbox_wrapper(engine)
+    toolbox.execute(FakeModel(), {}, types.SimpleNamespace())
+    assert [a["algorithm_id"] for a in activities(store)] == ["demo_model"]

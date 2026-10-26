@@ -1,0 +1,12 @@
+# Raw inputs and intermediate outputs are regenerable and large; they go to the
+# Zenodo data archive, not into git. Scripts, frozen hypotheses and the result
+# JSON/CSV files (the numbers the paper prints) are tracked.
+*/run/
+*/data/*.tif
+*/provenance*.db*
+*/scratch/
+*.aux.xml
+*/hooks/
+*/work/
+overhead/data/
+figures/work/

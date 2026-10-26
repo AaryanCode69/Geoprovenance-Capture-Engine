@@ -700,7 +700,9 @@ def test_structure_and_geometry_claim_no_byte_coverage():
     assert by_strategy["structure"].file_size_bytes is None
     assert by_strategy["geometry"].file_size_bytes is None
     assert by_strategy["file"].file_size_bytes == 324
-    assert by_strategy["attributes"].file_size_bytes == 330
+    # Since 24 Oct 2026 the attribute payload is the multiset digest
+    # "<rows>:<2048-bit sum in hex>\n", so its size is fixed, not the file's.
+    assert by_strategy["attributes"].file_size_bytes == len("8:") + 512 + 1
 
 
 def test_the_digest_recipe_travels_inside_the_hash():
@@ -718,6 +720,6 @@ def test_the_digest_recipe_travels_inside_the_hash():
 
     payload = {"format": "Shapefile", "layers": []}
     assert _json_digest(STRUCTURE_ALGORITHM, payload) != _json_digest(
-        "geoprovenance/structure/2", payload
+        "geoprovenance/structure/999", payload
     )
     assert _stream_digest("a", [b"x"])[0] != _stream_digest("b", [b"x"])[0]

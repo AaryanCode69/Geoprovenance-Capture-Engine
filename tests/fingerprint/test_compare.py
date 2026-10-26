@@ -29,6 +29,7 @@ from geoprovenance.fingerprint import (
     STRATEGY_FILE,
     STRATEGY_GEOMETRY,
     STRATEGY_GEOMETRY_CONTENT,
+    STRATEGY_PIXEL_CONTENT,
     STRATEGY_STRUCTURE,
     compare_fingerprint_sets,
     fingerprint_dataset,
@@ -292,7 +293,9 @@ def test_a_schema_change_outranks_the_edits_that_came_with_it(
 def test_a_format_with_no_readable_description_degrades_to_changed(
     tmp_path: pathlib.Path,
 ):
-    """A GeoTIFF has only a byte hash, so only a byte hash's answer is available.
+    """A file whose format cannot be read has only a byte hash, so only a byte
+    hash's answer is available. (Since 24 Oct 2026 a real GeoTIFF is read by
+    `tiff.py`; this one has no image file directory, so it still is not.)
 
     `changed` and not `resaved`: with nothing measured about the data, three
     signals that agree cannot be produced, and inferring a re-save from signals
@@ -312,6 +315,7 @@ def test_a_format_with_no_readable_description_degrades_to_changed(
         STRATEGY_GEOMETRY,
         STRATEGY_GEOMETRY_CONTENT,
         STRATEGY_ATTRIBUTES,
+        STRATEGY_PIXEL_CONTENT,
     }
     assert "cannot say in what way" in comparison.explain()
 

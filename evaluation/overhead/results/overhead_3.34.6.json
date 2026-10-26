@@ -1,0 +1,2167 @@
+{
+  "versions": {
+    "qgis_version": "3.34.6",
+    "os_info": "Linux-7.2.11-1-cachyos-x86_64-with-glibc2.44",
+    "python_version": "3.12.15",
+    "gdal_version": "3.8.5",
+    "proj_version": "9.4",
+    "geos_version": "3.12.1",
+    "qgis_version_full": "3.34.6-Prizren",
+    "qt_version": "5.15.8",
+    "pyqt_version": "5.15.9"
+  },
+  "runs_per_condition": 10,
+  "workflows": [
+    "coastal_raster",
+    "hydro_raster",
+    "dem_full"
+  ],
+  "db_bytes_after_load": 143360,
+  "registry_snapshot_bytes": 8207,
+  "summary": {
+    "coastal_raster": {
+      "off": {
+        "per_job_s": {
+          "mean": 0.12456234312485322,
+          "sd": 0.007521520581990456,
+          "ci95": 0.005380197877866454,
+          "n": 10
+        }
+      },
+      "capture": {
+        "per_job_s": {
+          "mean": 0.1438840784754575,
+          "sd": 0.01708805270733095,
+          "ci95": 0.012223207250537408,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 9.852439675159985,
+          "sd": 1.115326248038521,
+          "ci95": 0.7978009030771831,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "relative_overhead_pct": 15.511698693109388
+      },
+      "full": {
+        "per_job_s": {
+          "mean": 0.15292127742541198,
+          "sd": 0.013325057017660766,
+          "ci95": 0.009531509314822072,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 8.806648524478078,
+          "sd": 0.7830668531878686,
+          "ci95": 0.5601333634367337,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 8.377187199948821,
+          "sd": 1.4256770053277183,
+          "ci95": 1.019797036380286,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 1.6243727259279694,
+          "sd": 0.15674233067812335,
+          "ci95": 0.11211891873373209,
+          "n": 10
+        },
+        "db_growth_per_workflow_bytes": {
+          "mean": 26624.0,
+          "sd": 7783.5975686767815,
+          "ci95": 5567.663435161288,
+          "n": 10
+        },
+        "db_growth_per_job_bytes": {
+          "mean": 6656.0,
+          "sd": 1945.8993921691954,
+          "ci95": 1391.915858790322,
+          "n": 10
+        },
+        "relative_overhead_pct": 22.766860022963446
+      }
+    },
+    "hydro_raster": {
+      "off": {
+        "per_job_s": {
+          "mean": 0.058607811467178784,
+          "sd": 0.006911125771834877,
+          "ci95": 0.004943578071211525,
+          "n": 10
+        }
+      },
+      "capture": {
+        "per_job_s": {
+          "mean": 0.06417049480005517,
+          "sd": 0.0044518198636038205,
+          "ci95": 0.003184418831499967,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 6.772399232916844,
+          "sd": 0.9559922434478757,
+          "ci95": 0.6838281413163296,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "relative_overhead_pct": 9.491368460314488
+      },
+      "full": {
+        "per_job_s": {
+          "mean": 0.08345444119962243,
+          "sd": 0.005489055533439086,
+          "ci95": 0.0039263609812106425,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 5.635165432613576,
+          "sd": 0.6328757603118627,
+          "ci95": 0.45270059231585874,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 20.41096096727415,
+          "sd": 1.0697278265268635,
+          "ci95": 0.7651840235543782,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 1.4224271665928732,
+          "sd": 0.22141237651442777,
+          "ci95": 0.15837786858000572,
+          "n": 10
+        },
+        "db_growth_per_workflow_bytes": {
+          "mean": 20480.0,
+          "sd": 9056.596760863811,
+          "ci95": 6478.2489314942495,
+          "n": 10
+        },
+        "db_growth_per_job_bytes": {
+          "mean": 6826.666666666667,
+          "sd": 3018.865586954604,
+          "ci95": 2159.416310498084,
+          "n": 10
+        },
+        "relative_overhead_pct": 42.39474075287407
+      }
+    },
+    "dem_full": {
+      "off": {
+        "per_job_s": {
+          "mean": 0.30972661490086467,
+          "sd": 0.0036233000645652597,
+          "ci95": 0.002591772648329121,
+          "n": 10
+        }
+      },
+      "capture": {
+        "per_job_s": {
+          "mean": 0.3179333376327122,
+          "sd": 0.004104648154707325,
+          "ci95": 0.002936084406153504,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 6.635044066691383,
+          "sd": 1.1722501068167366,
+          "ci95": 0.8385189494961264,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 0.0,
+          "sd": 0.0,
+          "ci95": 0.0,
+          "n": 10
+        },
+        "relative_overhead_pct": 2.6496666211504887
+      },
+      "full": {
+        "per_job_s": {
+          "mean": 0.508241529098935,
+          "sd": 0.008833643702052876,
+          "ci95": 0.006318769001764271,
+          "n": 10
+        },
+        "capture_write_ms_per_job": {
+          "mean": 7.343840831890702,
+          "sd": 1.733455851848672,
+          "ci95": 1.2399534633757978,
+          "n": 10
+        },
+        "fingerprint_ms_per_job": {
+          "mean": 183.86773920137784,
+          "sd": 2.119943739066947,
+          "ci95": 1.516411034416915,
+          "n": 10
+        },
+        "derivation_ms_per_job": {
+          "mean": 1.5956040673093717,
+          "sd": 0.327461643837237,
+          "ci95": 0.23423567376445675,
+          "n": 10
+        },
+        "db_growth_per_workflow_bytes": {
+          "mean": 15564.8,
+          "sd": 7675.068046024811,
+          "ci95": 5490.031485465357,
+          "n": 10
+        },
+        "db_growth_per_job_bytes": {
+          "mean": 5188.266666666666,
+          "sd": 2558.356015341604,
+          "ci95": 1830.010495155119,
+          "n": 10
+        },
+        "relative_overhead_pct": 64.09359242879717
+      }
+    }
+  },
+  "runs": [
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 0,
+      "jobs": 4,
+      "job_seconds": [
+        0.058021095996082295,
+        0.046681861000251956,
+        0.1905548610011465,
+        0.18554541299818084
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": true
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 0,
+      "jobs": 4,
+      "job_seconds": [
+        0.061394693999318406,
+        0.05285532800189685,
+        0.24362048799957847,
+        0.1866336089951801
+      ],
+      "stages_s": {
+        "record": 0.037679625005694106,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.037679625005694106
+      },
+      "db_growth_bytes": 8192,
+      "warmup": true
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 0,
+      "jobs": 4,
+      "job_seconds": [
+        0.057073251002293546,
+        0.06861803200445138,
+        0.22235029600415146,
+        0.2594778069978929
+      ],
+      "stages_s": {
+        "record": 0.07352815600461327,
+        "fingerprint": 0.03273002900823485,
+        "derivation": 0.006494073997600935,
+        "capture_write": 0.03430405299877748
+      },
+      "db_growth_bytes": 24576,
+      "warmup": true
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.07297633499547374,
+        0.05175569299899507,
+        0.054806694002763834
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": true
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.06323508900095476,
+        0.06386763999762479,
+        0.06028689700178802
+      ],
+      "stages_s": {
+        "record": 0.01680702200246742,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01680702200246742
+      },
+      "db_growth_bytes": 4096,
+      "warmup": true
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.0980605069999001,
+        0.08401606499683112,
+        0.07569574099761667
+      ],
+      "stages_s": {
+        "record": 0.09043451199977426,
+        "fingerprint": 0.06879709300847026,
+        "derivation": 0.005476087004353758,
+        "capture_write": 0.016161331986950245
+      },
+      "db_growth_bytes": 16384,
+      "warmup": true
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.40048757399927126,
+        0.3173583210009383,
+        0.20465719400090165
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": true
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.39779319900117116,
+        0.31720728000072995,
+        0.2110494060034398
+      ],
+      "stages_s": {
+        "record": 0.01907605500309728,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01907605500309728
+      },
+      "db_growth_bytes": 4096,
+      "warmup": true
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 0,
+      "jobs": 3,
+      "job_seconds": [
+        0.5681677579996176,
+        0.5662716350052506,
+        0.3789987030031625
+      ],
+      "stages_s": {
+        "record": 0.5787872380024055,
+        "fingerprint": 0.5545676359906793,
+        "derivation": 0.005495010998856742,
+        "capture_write": 0.018724591012869496
+      },
+      "db_growth_bytes": 20480,
+      "warmup": true
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 1,
+      "jobs": 4,
+      "job_seconds": [
+        0.04693898099503713,
+        0.047563248001097236,
+        0.1948775709970505,
+        0.18622686099843122
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 1,
+      "jobs": 4,
+      "job_seconds": [
+        0.057158743002219126,
+        0.05420203100220533,
+        0.19592705000104615,
+        0.19696687000396196
+      ],
+      "stages_s": {
+        "record": 0.03841734000161523,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.03841734000161523
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 1,
+      "jobs": 4,
+      "job_seconds": [
+        0.06729568400623975,
+        0.05843269999604672,
+        0.20989288599957945,
+        0.22361861099489033
+      ],
+      "stages_s": {
+        "record": 0.06405865000124322,
+        "fingerprint": 0.027312957994581666,
+        "derivation": 0.006513797001389321,
+        "capture_write": 0.030231895005272236
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.057556471998395864,
+        0.05031285300356103,
+        0.05311356400488876
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.05964694100111956,
+        0.0654543209966505,
+        0.05828107500565238
+      ],
+      "stages_s": {
+        "record": 0.019126642000628635,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.019126642000628635
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.08375248000083957,
+        0.07206169499841053,
+        0.06743179600016447
+      ],
+      "stages_s": {
+        "record": 0.07451503599440912,
+        "fingerprint": 0.05827356200461509,
+        "derivation": 0.003239598991058301,
+        "capture_write": 0.01300187499873573
+      },
+      "db_growth_bytes": 40960,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.40636453600018285,
+        0.32987424999737414,
+        0.21043211699725362
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.40659071700065397,
+        0.31368484099948546,
+        0.2189805560046807
+      ],
+      "stages_s": {
+        "record": 0.01675848400191171,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01675848400191171
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 1,
+      "jobs": 3,
+      "job_seconds": [
+        0.5608530479948968,
+        0.5653579689969774,
+        0.3655186510004569
+      ],
+      "stages_s": {
+        "record": 0.5630663560004905,
+        "fingerprint": 0.5449494929998764,
+        "derivation": 0.003946776007069275,
+        "capture_write": 0.014170086993544828
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 2,
+      "jobs": 4,
+      "job_seconds": [
+        0.0523239719987032,
+        0.047073563997400925,
+        0.1994828749957378,
+        0.18497501999809174
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 2,
+      "jobs": 4,
+      "job_seconds": [
+        0.06066120900504757,
+        0.0542783069977304,
+        0.21098144599818625,
+        0.23697197400178993
+      ],
+      "stages_s": {
+        "record": 0.03562216400314355,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.03562216400314355
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 2,
+      "jobs": 4,
+      "job_seconds": [
+        0.05883959300263086,
+        0.0590276119983173,
+        0.2228816420029034,
+        0.220575084000302
+      ],
+      "stages_s": {
+        "record": 0.06835279600636568,
+        "fingerprint": 0.028997461013204884,
+        "derivation": 0.0058308620064053684,
+        "capture_write": 0.03352447298675543
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.05838349500118056,
+        0.051111811997543555,
+        0.05221460500615649
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.06097118699835846,
+        0.06123551200289512,
+        0.058297394003602676
+      ],
+      "stages_s": {
+        "record": 0.021613422002701554,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.021613422002701554
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.09201478600152768,
+        0.06557757999689784,
+        0.06876094399922295
+      ],
+      "stages_s": {
+        "record": 0.07631842399860034,
+        "fingerprint": 0.055956497009901796,
+        "derivation": 0.004275241997675039,
+        "capture_write": 0.016086684991023503
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.40389297600631835,
+        0.3217846869956702,
+        0.20276244699925883
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.40322590099822264,
+        0.3388797590014292,
+        0.2171696610021172
+      ],
+      "stages_s": {
+        "record": 0.01849012000457151,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01849012000457151
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 2,
+      "jobs": 3,
+      "job_seconds": [
+        0.5580706609980552,
+        0.5655571620009141,
+        0.3799129440012621
+      ],
+      "stages_s": {
+        "record": 0.5743141049970291,
+        "fingerprint": 0.5497805710037937,
+        "derivation": 0.004447921004611999,
+        "capture_write": 0.020085612988623325
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 3,
+      "jobs": 4,
+      "job_seconds": [
+        0.046824720993754454,
+        0.04310806700232206,
+        0.19223510300071212,
+        0.18504579900036333
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 3,
+      "jobs": 4,
+      "job_seconds": [
+        0.058274666997021995,
+        0.054871788997843396,
+        0.20441515000129584,
+        0.20889229699969292
+      ],
+      "stages_s": {
+        "record": 0.04016717600461561,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.04016717600461561
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 3,
+      "jobs": 4,
+      "job_seconds": [
+        0.07302200800040737,
+        0.0689704529941082,
+        0.21192493299895432,
+        0.21473474099911982
+      ],
+      "stages_s": {
+        "record": 0.07001712199416943,
+        "fingerprint": 0.026531498988333624,
+        "derivation": 0.006542196992086247,
+        "capture_write": 0.03694342601374956
+      },
+      "db_growth_bytes": 28672,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.052775989002839196,
+        0.05153575500298757,
+        0.05268408999836538
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.06008197800110793,
+        0.0592130540026119,
+        0.06301770299614873
+      ],
+      "stages_s": {
+        "record": 0.017401622993929777,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.017401622993929777
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.09210878099838737,
+        0.09106266500020865,
+        0.07117996000306448
+      ],
+      "stages_s": {
+        "record": 0.08137911700032419,
+        "fingerprint": 0.05859094799961895,
+        "derivation": 0.004567825002595782,
+        "capture_write": 0.018220343998109456
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.4053730910018203,
+        0.32279631099663675,
+        0.20635766499617603
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.4098492810007883,
+        0.33151323800120736,
+        0.21819610099919373
+      ],
+      "stages_s": {
+        "record": 0.020344887001556344,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.020344887001556344
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 3,
+      "jobs": 3,
+      "job_seconds": [
+        0.5732145579968346,
+        0.5769640479993541,
+        0.37570149100065464
+      ],
+      "stages_s": {
+        "record": 0.5867167570031597,
+        "fingerprint": 0.5481236249979702,
+        "derivation": 0.004645713997888379,
+        "capture_write": 0.03394741800730117
+      },
+      "db_growth_bytes": 4096,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 4,
+      "jobs": 4,
+      "job_seconds": [
+        0.054019355004129466,
+        0.04652352599805454,
+        0.22627158999966923,
+        0.18269403599697398
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 4,
+      "jobs": 4,
+      "job_seconds": [
+        0.05721237000398105,
+        0.06385683499684092,
+        0.2126641379945795,
+        0.20005908599705435
+      ],
+      "stages_s": {
+        "record": 0.04534958900330821,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.04534958900330821
+      },
+      "db_growth_bytes": 4096,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 4,
+      "jobs": 4,
+      "job_seconds": [
+        0.07349961099680513,
+        0.07793525099987164,
+        0.26026277700293576,
+        0.220123938001052
+      ],
+      "stages_s": {
+        "record": 0.0757344710000325,
+        "fingerprint": 0.03254224500415148,
+        "derivation": 0.006288042008236516,
+        "capture_write": 0.0369041839876445
+      },
+      "db_growth_bytes": 45056,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.04652692999661667,
+        0.055182046999107115,
+        0.050630306999664754
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.05568138600210659,
+        0.06862618299783207,
+        0.06120838600327261
+      ],
+      "stages_s": {
+        "record": 0.01899180800683098,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01899180800683098
+      },
+      "db_growth_bytes": 4096,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.103882536997844,
+        0.08753390600031707,
+        0.0843217799992999
+      ],
+      "stages_s": {
+        "record": 0.08402957200451056,
+        "fingerprint": 0.06471870600944385,
+        "derivation": 0.003682921000290662,
+        "capture_write": 0.015627944994776044
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.4025219460017979,
+        0.32540600900392747,
+        0.20432466700003715
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.4051871289993869,
+        0.32402004500181647,
+        0.21283448099711677
+      ],
+      "stages_s": {
+        "record": 0.01917836100619752,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01917836100619752
+      },
+      "db_growth_bytes": 32768,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 4,
+      "jobs": 3,
+      "job_seconds": [
+        0.5741582049959106,
+        0.5945991109983879,
+        0.37581204200250795
+      ],
+      "stages_s": {
+        "record": 0.5703256570050144,
+        "fingerprint": 0.5456759040025645,
+        "derivation": 0.004439270000148099,
+        "capture_write": 0.02021048300230177
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 5,
+      "jobs": 4,
+      "job_seconds": [
+        0.04619938499672571,
+        0.05312596000294434,
+        0.1862027669994859,
+        0.18706851799652213
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 5,
+      "jobs": 4,
+      "job_seconds": [
+        0.05688422299863305,
+        0.05141506400104845,
+        0.18911198199930368,
+        0.19811646900052438
+      ],
+      "stages_s": {
+        "record": 0.03150497400201857,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.03150497400201857
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 5,
+      "jobs": 4,
+      "job_seconds": [
+        0.06447711700457148,
+        0.061160762001236435,
+        0.21427553999819793,
+        0.21419262900599279
+      ],
+      "stages_s": {
+        "record": 0.06531305799580878,
+        "fingerprint": 0.028425531003449578,
+        "derivation": 0.005312052002409473,
+        "capture_write": 0.031575474989949726
+      },
+      "db_growth_bytes": 28672,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.0458116629961296,
+        0.05329863000224577,
+        0.052802462996623944
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.062262172999908216,
+        0.05995999999868218,
+        0.06075119200249901
+      ],
+      "stages_s": {
+        "record": 0.019652739996672608,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.019652739996672608
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.09437089700077195,
+        0.08786132100067334,
+        0.07440967000002274
+      ],
+      "stages_s": {
+        "record": 0.08453106399974786,
+        "fingerprint": 0.0629155919959885,
+        "derivation": 0.004180265998002142,
+        "capture_write": 0.01743520600575721
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.4026468050069525,
+        0.3231457709989627,
+        0.20955482499994105
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.3976061180001125,
+        0.329960499999288,
+        0.21164887199847726
+      ],
+      "stages_s": {
+        "record": 0.015411287997267209,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.015411287997267209
+      },
+      "db_growth_bytes": 4096,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 5,
+      "jobs": 3,
+      "job_seconds": [
+        0.571083295995777,
+        0.5733465130033437,
+        0.37462212999525946
+      ],
+      "stages_s": {
+        "record": 0.5797405780103873,
+        "fingerprint": 0.5534003940119874,
+        "derivation": 0.004870976001257077,
+        "capture_write": 0.021469207997142803
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 6,
+      "jobs": 4,
+      "job_seconds": [
+        0.05727826300426386,
+        0.04748419800307602,
+        0.19602685500285588,
+        0.16192385699832812
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 6,
+      "jobs": 4,
+      "job_seconds": [
+        0.05936939700040966,
+        0.05978434399730759,
+        0.2039093830026104,
+        0.20880850599496625
+      ],
+      "stages_s": {
+        "record": 0.040400320998742245,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.040400320998742245
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 6,
+      "jobs": 4,
+      "job_seconds": [
+        0.0678284729947336,
+        0.061003848000837024,
+        0.2064801950036781,
+        0.24600182900030632
+      ],
+      "stages_s": {
+        "record": 0.07750831600424135,
+        "fingerprint": 0.03518672900099773,
+        "derivation": 0.0067605250151245855,
+        "capture_write": 0.035561061988119036
+      },
+      "db_growth_bytes": 28672,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.07186733499838738,
+        0.06951418700191425,
+        0.06253197999467375
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.07541120100358967,
+        0.08058626399724744,
+        0.06490122600371251
+      ],
+      "stages_s": {
+        "record": 0.02716744100325741,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.02716744100325741
+      },
+      "db_growth_bytes": 4096,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.10354211999947438,
+        0.08211733299685875,
+        0.08057007999741472
+      ],
+      "stages_s": {
+        "record": 0.08856350499991095,
+        "fingerprint": 0.06477416199777508,
+        "derivation": 0.004023572000733111,
+        "capture_write": 0.019765771001402754
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.40715859299962176,
+        0.31087284500245005,
+        0.2134448600045289
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.40486564899765654,
+        0.33089135799673386,
+        0.23174738999659894
+      ],
+      "stages_s": {
+        "record": 0.015875198994763196,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.015875198994763196
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 6,
+      "jobs": 3,
+      "job_seconds": [
+        0.5597589050012175,
+        0.5883877979940735,
+        0.3898934860044392
+      ],
+      "stages_s": {
+        "record": 0.5909745280005154,
+        "fingerprint": 0.5662159140047152,
+        "derivation": 0.00379732099827379,
+        "capture_write": 0.02096129299752647
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 7,
+      "jobs": 4,
+      "job_seconds": [
+        0.04594442999950843,
+        0.04467134900187375,
+        0.2072317580023082,
+        0.2335916010051733
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 7,
+      "jobs": 4,
+      "job_seconds": [
+        0.07573215899901697,
+        0.06916580500546843,
+        0.28334359799919184,
+        0.21966042200074298
+      ],
+      "stages_s": {
+        "record": 0.038453478991868906,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.038453478991868906
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 7,
+      "jobs": 4,
+      "job_seconds": [
+        0.09109221000107937,
+        0.07268673100043088,
+        0.2511652570028673,
+        0.2739984979998553
+      ],
+      "stages_s": {
+        "record": 0.08192382699780865,
+        "fingerprint": 0.03626678900036495,
+        "derivation": 0.007230230010463856,
+        "capture_write": 0.03842680798697984
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.06299006900371751,
+        0.0628568410029402,
+        0.060526364999532234
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.06173014800151577,
+        0.06267078100063372,
+        0.06365070099855075
+      ],
+      "stages_s": {
+        "record": 0.021104345993080642,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.021104345993080642
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.09960286700516008,
+        0.07116036799561698,
+        0.07710335400042823
+      ],
+      "stages_s": {
+        "record": 0.08650534800835885,
+        "fingerprint": 0.06508787499478785,
+        "derivation": 0.004207917001622263,
+        "capture_write": 0.017209556011948735
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.40611694600374904,
+        0.3190296489992761,
+        0.20502204000513302
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.3978130140021676,
+        0.3408955889972276,
+        0.23104145000252174
+      ],
+      "stages_s": {
+        "record": 0.024462794994178694,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.024462794994178694
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 7,
+      "jobs": 3,
+      "job_seconds": [
+        0.5699234849962522,
+        0.5802029650003533,
+        0.3761971089988947
+      ],
+      "stages_s": {
+        "record": 0.5834590820013545,
+        "fingerprint": 0.5545178740067058,
+        "derivation": 0.00509903999773087,
+        "capture_write": 0.02384216799691785
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 8,
+      "jobs": 4,
+      "job_seconds": [
+        0.04635785699792905,
+        0.04501991900178837,
+        0.2112747479986865,
+        0.22610275800252566
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 8,
+      "jobs": 4,
+      "job_seconds": [
+        0.07445813899539644,
+        0.07000150300154928,
+        0.24662948100012727,
+        0.24972349999734433
+      ],
+      "stages_s": {
+        "record": 0.035540350996598136,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.035540350996598136
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 8,
+      "jobs": 4,
+      "job_seconds": [
+        0.08048153699928662,
+        0.07669907100353157,
+        0.2559591570025077,
+        0.2506876560000819
+      ],
+      "stages_s": {
+        "record": 0.07967007900879253,
+        "fingerprint": 0.03745724799227901,
+        "derivation": 0.006730908004101366,
+        "capture_write": 0.03548192301241215
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.06505829500383697,
+        0.0660743070038734,
+        0.06187441200017929
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.06504492299427511,
+        0.06840961499983678,
+        0.06812838699988788
+      ],
+      "stages_s": {
+        "record": 0.021918634993198793,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.021918634993198793
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.09641089700016892,
+        0.07661035100318259,
+        0.08847269300167682
+      ],
+      "stages_s": {
+        "record": 0.08310410498961573,
+        "fingerprint": 0.062020932004088536,
+        "derivation": 0.004469463005079888,
+        "capture_write": 0.01661370998044731
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.39170104500226444,
+        0.3101786190018174,
+        0.2170303140010219
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.40613306899467716,
+        0.32118157699733274,
+        0.2178388679967611
+      ],
+      "stages_s": {
+        "record": 0.025929690003977157,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.025929690003977157
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 8,
+      "jobs": 3,
+      "job_seconds": [
+        0.5603861790004885,
+        0.560249895999732,
+        0.3734715789978509
+      ],
+      "stages_s": {
+        "record": 0.5758580389956478,
+        "fingerprint": 0.546059462998528,
+        "derivation": 0.0037335870001697913,
+        "capture_write": 0.026064988996949978
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 9,
+      "jobs": 4,
+      "job_seconds": [
+        0.04958951399748912,
+        0.045863646002544556,
+        0.24886055599927204,
+        0.2024083599972073
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 9,
+      "jobs": 4,
+      "job_seconds": [
+        0.07600866100256098,
+        0.06933100700553041,
+        0.25359783800377045,
+        0.288009294999938
+      ],
+      "stages_s": {
+        "record": 0.044737658005033154,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.044737658005033154
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 9,
+      "jobs": 4,
+      "job_seconds": [
+        0.08177351899939822,
+        0.07342255300318357,
+        0.25317924799310276,
+        0.2732714989979286
+      ],
+      "stages_s": {
+        "record": 0.09177013400767464,
+        "fingerprint": 0.04389239099691622,
+        "derivation": 0.0074679479948827066,
+        "capture_write": 0.040409795015875716
+      },
+      "db_growth_bytes": 28672,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.06995832399843493,
+        0.0646789809979964,
+        0.05992385699937586
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.06334728499496123,
+        0.07372163899708539,
+        0.0704701569993631
+      ],
+      "stages_s": {
+        "record": 0.01846407799894223,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.01846407799894223
+      },
+      "db_growth_bytes": 16384,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.10750098500284366,
+        0.07080700399819762,
+        0.06941587699839147
+      ],
+      "stages_s": {
+        "record": 0.08347730799869169,
+        "fingerprint": 0.058761658998264465,
+        "derivation": 0.005806518005556427,
+        "capture_write": 0.018909130994870793
+      },
+      "db_growth_bytes": 20480,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.4052835140028037,
+        0.31367331100045703,
+        0.20971954299602658
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.39774692799983313,
+        0.33311944999877596,
+        0.21764561899908585
+      ],
+      "stages_s": {
+        "record": 0.020497978999628685,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.020497978999628685
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 9,
+      "jobs": 3,
+      "job_seconds": [
+        0.5693160079972586,
+        0.5812200059954193,
+        0.37187943900062237
+      ],
+      "stages_s": {
+        "record": 0.5804569170068135,
+        "fingerprint": 0.5552017140071257,
+        "derivation": 0.0063012260070536286,
+        "capture_write": 0.018953976992634125
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "off",
+      "repeat": 10,
+      "jobs": 4,
+      "job_seconds": [
+        0.052034856998943724,
+        0.0439522630040301,
+        0.1803390870045405,
+        0.2277569299985771
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "capture",
+      "repeat": 10,
+      "jobs": 4,
+      "job_seconds": [
+        0.08136963800643571,
+        0.07173470000270754,
+        0.25047630900371587,
+        0.22132775399950333
+      ],
+      "stages_s": {
+        "record": 0.04390453499945579,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.04390453499945579
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    },
+    {
+      "workflow": "coastal_raster",
+      "condition": "full",
+      "repeat": 10,
+      "jobs": 4,
+      "job_seconds": [
+        0.08144535400060704,
+        0.07336123300046893,
+        0.22866908900323324,
+        0.24250056800519815
+      ],
+      "stages_s": {
+        "record": 0.07797988499805797,
+        "fingerprint": 0.038474637003673706,
+        "derivation": 0.006298348002019338,
+        "capture_write": 0.033206899992364924
+      },
+      "db_growth_bytes": 24576,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "off",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.06748590300412616,
+        0.06481733900000108,
+        0.06413547400006792
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "capture",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.05806199799553724,
+        0.06812009699933697,
+        0.06617193700367352
+      ],
+      "stages_s": {
+        "record": 0.017731241998262703,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.017731241998262703
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "hydro_raster",
+      "condition": "full",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.09743172700109426,
+        0.07734590299514821,
+        0.0692108789953636
+      ],
+      "stages_s": {
+        "record": 0.08163312800024869,
+        "fingerprint": 0.061228896003740374,
+        "derivation": 0.004219491995172575,
+        "capture_write": 0.01618474000133574
+      },
+      "db_growth_bytes": 28672,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "off",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.3914844320024713,
+        0.3050146890018368,
+        0.20882994400017196
+      ],
+      "stages_s": {
+        "record": 0.0,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.0
+      },
+      "db_growth_bytes": 0,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "capture",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.4045980079972651,
+        0.33631639699888183,
+        0.22681856300187064
+      ],
+      "stages_s": {
+        "record": 0.02210251899668947,
+        "fingerprint": 0.0,
+        "derivation": 0.0,
+        "capture_write": 0.02210251899668947
+      },
+      "db_growth_bytes": 8192,
+      "warmup": false
+    },
+    {
+      "workflow": "dem_full",
+      "condition": "full",
+      "repeat": 10,
+      "jobs": 3,
+      "job_seconds": [
+        0.5743962499982445,
+        0.630030580003222,
+        0.37716035899939016
+      ],
+      "stages_s": {
+        "record": 0.5793035039969254,
+        "fingerprint": 0.5521072240080684,
+        "derivation": 0.0065862910050782375,
+        "capture_write": 0.02060998898377875
+      },
+      "db_growth_bytes": 12288,
+      "warmup": false
+    }
+  ]
+}

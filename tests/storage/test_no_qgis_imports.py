@@ -78,6 +78,9 @@ EXTRA_NO_QGIS_MODULES = (
     "geoprovenance.fingerprint.hash",
     "geoprovenance.fingerprint.readers",
     "geoprovenance.fingerprint.compare",
+    "geoprovenance.fingerprint.tiff",
+    "geoprovenance.capture.registry",
+    "geoprovenance.capture.environment",
     "geoprovenance.lifecycle",
     "geoprovenance.log",
 )

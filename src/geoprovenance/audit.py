@@ -3,7 +3,9 @@
 Owner: Person C (README "Person C — Visualization & Reproducibility Audit").
 Written by Person A under the explicit written override of RULES.md §1.2 [HARD]
 requested on 30 Aug 2026, so that the workflow panel could be demonstrated.
-Person C owns this file; A owns nothing in it.
+Person C owns this file; A owns nothing in it. The v3 environment check and the
+registry-snapshot fallback were added by Person A on 24 Oct 2026 under a second
+explicit written override (Array manuscript, CLAIMS_TO_IMPLEMENT.md C2, C9).
 
     THIS MODULE IMPORTS NO QGIS at module level. The two checks that genuinely
     need a live Processing registry reach for it lazily and report "not checked"
@@ -24,9 +26,12 @@ Two decisions the research doc leaves open, made here
     finding — say so if it is quoted.
 
     A check that could not be run scores NULL, never 100. Outside QGIS there is
-    no Processing registry, so "algorithm available" and "parameters valid" are
-    unanswerable, and the overall score is the weighted mean over the checks
-    that DID run. Scoring an unrun check as a pass would make every offline
+    no live Processing registry; since v3 (24 Oct 2026) the audit then falls
+    back to the most recent registry snapshot stored in the database — the
+    algorithms offered by the last installation that opened it — and only when
+    there is no snapshot either are "algorithm available", "parameters valid"
+    and "environment similar" unanswerable. The overall score is the weighted
+    mean over the checks that DID run. Scoring an unrun check as a pass would make every offline
     audit report perfect reproducibility, which is the same
     unmeasured-equals-fine mistake `fingerprint/compare.py` refuses, and the
     same one that let three §5.9 tests pass against a broken dedup in A6.
@@ -230,22 +235,93 @@ def _default_parameter_names(algorithm_id: str) -> set[str] | None:
         return None
 
 
+#: The software a result can silently depend on, compared at major.minor (C2).
+_LIBRARIES = (
+    ("qgis_version", "QGIS"),
+    ("gdal_version", "GDAL"),
+    ("proj_version", "PROJ"),
+    ("geos_version", "GEOS"),
+    ("python_version", "Python"),
+)
+
+
+def _known(value: Any) -> bool:
+    return bool(value) and value != environment.UNKNOWN
+
+
 def _environment_similar(
-    recorded_agent: dict[str, Any] | None, current_qgis: str
+    recorded_agent: dict[str, Any] | None, current: dict[str, Any] | None
 ) -> tuple[bool | None, str]:
-    """The same major.minor QGIS the job originally ran on."""
-    if recorded_agent is None or current_qgis == environment.UNKNOWN:
+    """The job's original QGIS, GDAL, PROJ, GEOS and Python, at major.minor.
+
+    Each library is compared only where BOTH sides know its version; one that
+    either side does not know takes no part, and if none can be compared the
+    check is not evaluable. Every library that differs is named.
+    """
+    if recorded_agent is None or not current:
         return None, ""
-    was = recorded_agent.get("qgis_version")
-    if not was or was == environment.UNKNOWN:
+    compared = 0
+    differences = []
+    for key, label in _LIBRARIES:
+        was, now = recorded_agent.get(key), current.get(key)
+        if not (_known(was) and _known(now)):
+            continue
+        compared += 1
+        if _series(str(was)) != _series(str(now)):
+            differences.append(f"{label} {was} then, {label} {now} now")
+    if not compared:
         return None, ""
-    if _series(was) == _series(current_qgis):
-        return True, ""
-    return False, f"QGIS {was} then, QGIS {current_qgis} now"
+    if differences:
+        return False, "; ".join(differences)
+    return True, ""
 
 
 def _series(version: str) -> tuple[str, ...]:
     return tuple(version.split(".")[:2])
+
+
+def _snapshot_probes(snapshot: dict[str, Any] | None):
+    """Availability and parameter lookups backed by a stored registry snapshot."""
+    if not snapshot:
+        return None, None
+    algorithms = snapshot.get("algorithms") or {}
+
+    def available(algorithm_id: str) -> bool | None:
+        return algorithm_id in algorithms
+
+    def parameter_names(algorithm_id: str) -> set[str] | None:
+        entry = algorithms.get(algorithm_id)
+        if entry is None:
+            return None
+        return set(entry.get("parameters") or [])
+
+    return available, parameter_names
+
+
+def _target_environment(store, current_qgis: str | None) -> tuple[dict | None, dict | None]:
+    """The environment to compare against, and the registry snapshot if used.
+
+    Live QGIS when this runs inside it. Otherwise the environment of the most
+    recent registry snapshot in the database — the last installation that
+    opened it. Otherwise nothing: the audit host's own Python is not the
+    target environment and is never compared.
+    """
+    if current_qgis is not None:
+        # An explicit override names the target QGIS and nothing else.
+        return {"qgis_version": current_qgis}, None
+    live = environment.probe()
+    if _known(live.get("qgis_version")):
+        return live, None
+    snapshot = None
+    latest = getattr(store, "latest_registry_snapshot", None)
+    if latest is not None:
+        try:
+            snapshot = latest()
+        except Exception:  # noqa: BLE001 — an audit reports, it does not crash
+            snapshot = None
+    if snapshot and snapshot.get("agent"):
+        return dict(snapshot["agent"]), snapshot
+    return None, None
 
 
 def _parameters_valid(
@@ -288,9 +364,10 @@ def audit_workflow(
     checks are exercisable without QGIS; each defaults to asking the real
     environment, which answers ``None`` when there is no QGIS to ask.
     """
-    probe = algorithm_probe or _default_algorithm_probe
-    names = parameter_names or _default_parameter_names
-    current_qgis = current_qgis if current_qgis is not None else environment.qgis_version()
+    current_env, snapshot = _target_environment(store, current_qgis)
+    snap_available, snap_names = _snapshot_probes(snapshot)
+    probe = algorithm_probe or snap_available or _default_algorithm_probe
+    names = parameter_names or snap_names or _default_parameter_names
 
     graph = prov.ProvGraph.load(store, workflow_id)
     steps: list[StepFinding] = []
@@ -317,7 +394,7 @@ def audit_workflow(
             ("input_exists", _inputs_exist(statuses)),
             ("input_unchanged", _inputs_unchanged(statuses)),
             ("environment_similar",
-             _environment_similar(graph.agent_for(activity["id"]), current_qgis)),
+             _environment_similar(graph.agent_for(activity["id"]), current_env)),
         ):
             checks[name] = ok
             if why:
