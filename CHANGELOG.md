@@ -4,10 +4,10 @@ All notable changes to GeoProvenance are recorded here. Versions follow
 [Semantic Versioning](https://semver.org/); while the major version is 0 the
 database shape and event format may still change between minor versions.
 
-## [1.0.0] — unreleased
+## [1.0.0] — 2026-10-26
 
 The release the Array manuscript describes. Built and measured locally on
-24 Oct 2026; not yet tagged, pushed or archived.
+24 Oct 2026; tagged and published on GitHub 26 Oct 2026.
 
 ### Added
 - **GeoTIFF fingerprinting, standard library only.** A TIFF reader (classic and

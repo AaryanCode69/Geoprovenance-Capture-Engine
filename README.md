@@ -5,7 +5,7 @@
 [![Tests](https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/actions/workflows/tests.yml/badge.svg)](https://github.com/AaryanCode69/Geoprovenance-Capture-Engine/actions/workflows/tests.yml)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](./LICENSE)
 [![QGIS](https://img.shields.io/badge/QGIS-3.28%E2%80%934.x-589632.svg)](https://qgis.org)
-![Version](https://img.shields.io/badge/version-0.1.0-informational.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-informational.svg)
 <!-- DOI badge: replace once Zenodo has minted the DOI (see docs/RELEASING.md)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
 -->
@@ -42,7 +42,7 @@ It needs no third-party Python packages, only the standard library and PyQGIS.
 
 ## Status and tested environment
 
-GeoProvenance is **experimental** (version 0.1.0, `experimental=True` in `metadata.txt`). Read the points below before relying on it.
+GeoProvenance is **experimental** (version 1.0.0, `experimental=True` in `metadata.txt`). Read the points below before relying on it.
 
 - **Verified on QGIS 4.2.1** (Python 3.13, Qt 6.10, PyQt6, Linux). On that version the plugin loads and unloads cleanly (11/11 in-QGIS lifecycle tests), and a 4-step workflow driven by `processing.run()` was captured completely (4/4).
 - **QGIS 3.x LTS is not yet verified.** The code supports PyQt5 and PyQt6 through runtime feature detection, but no 3.x release has been tested.
